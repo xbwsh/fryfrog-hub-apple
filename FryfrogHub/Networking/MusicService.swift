@@ -6,6 +6,11 @@ struct MusicScanResult: Decodable {
     let libraryCount: Int?
 }
 
+/// 音乐库数据服务：首页分组、专辑/歌手详情、歌曲列表与歌单。
+/// T3-6：整体标注 @MainActor——songs/groups/selectedAlbum 等状态仅主线程变更，
+/// 消除 loadHome/setStar 并发写竞态；调用方（音乐视图族、MusicCacheService、
+/// MusicAudioPlayer）本就处于 MainActor 隔离域，无需额外跳转。
+@MainActor
 @Observable
 final class MusicService {
     static let shared = MusicService()
