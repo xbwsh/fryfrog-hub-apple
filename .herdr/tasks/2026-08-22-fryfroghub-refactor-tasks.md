@@ -113,14 +113,14 @@ Views/Music/LyricsLine.swift             // LyricsLine:1832
 
 ---
 
-## 角色与门禁
+## 角色与门禁（2026-08-22 修订：单执行者）
+
+> 修订：仅 1 名执行者，Executor-A/B/C 合并为单一 Executor，串行执行，取消并行。前述分工仅保留为任务类型标识，不代表并行人力。
 
 | 角色 | 职责 | 约束 |
 |---|---|---|
 | Leader (当前) | 任务分解、优先级裁决、最终验收 | 不直接改业务代码 |
-| Executor-A | P0 并发/基建 + P2 可测试化 | 只能改任务单内文件，diff 需附验证证据 |
-| Executor-B | Music/Player 巨型文件拆分 + setStar 重构 | 纯搬运，禁止改逻辑 |
-| Executor-C | Profile/Series 拆分 + 日志 + host去重 | 同上 |
+| Executor (唯一) | 全量 P0-P2 串行执行 | 只能改任务单内文件，diff 需附验证证据，严禁并行/跳序 |
 | Reviewer | 只读审查，追加评审单 | 不改源码，`REVIEW_PASS`/`REVIEW_CHANGES_REQUIRED` 需带文件:行证据 |
 
 **门禁:**
@@ -128,12 +128,12 @@ Views/Music/LyricsLine.swift             // LyricsLine:1832
 - `max_rework=2`，超限由 Leader 接管
 - 任何 Phase 引入新依赖（如 `AsyncAlgorithms`）需 Leader 审批
 
-## 里程碑
+## 里程碑（单执行者串行版）
 
-- M1 (T0+T1): 0.5d + 1.5d = 2d，产出：无崩溃、可并发、无阻塞
-- M2 (T2): 4.5d，可选拆 2 人并行压缩至 2.5d
-- M3 (T3): 3.5d
-- **合计 6-10 人日**，单人串行约 10d，三人并行约 5d
+- M1 (T0+T1): 0.5d + 1.5d = 2d，产出：无崩溃、可并发、无阻塞 — 已完成 2026-08-22
+- M2 (T2): 4.5d 串行（原 2 人并行 2.5d）— 已完成 2026-08-22
+- M3 (T3): 3.5d → 单人串行 3.5d，其中剩余 T3-1 1d + T3-2 1d + T3-3 0.5d + T3-6 0.5h = 约 2.5d
+- **合计 单人串行约 8-9d**（原三人并行约 5d）
 
 ## 下一步 (Leader 指令)
 
