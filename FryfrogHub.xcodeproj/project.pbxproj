@@ -31,6 +31,7 @@
 		3E02D6E9B30E01EF18E77CF3 /* LoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE00605BD74F9E0A4288109 /* LoginViewModel.swift */; };
 		3F2831A7E8A36EE090340E00 /* MusicNowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABDF20B082BF1CBC7C7DEDE2 /* MusicNowPlayingView.swift */; };
 		405100335BFEDFFC5B335DF9 /* CreatePlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE3E8B60310AF1FB44C14C9D /* CreatePlaylistSheet.swift */; };
+		4442033807D85BEC677B56B3 /* APIClientFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32DC25FD263036461F4A5762 /* APIClientFallbackTests.swift */; };
 		47DD6A5800F238D5A6A4D247 /* MpvMetalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 888CEC658DC260063F0570D6 /* MpvMetalView.swift */; };
 		49999FA89369686A78193928 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886CE710B7995FB2ADF03AC6 /* AuthService.swift */; };
 		4BC9C46E54731995AA166DB2 /* FlatSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6577668BEF1D9DEB8F341C4 /* FlatSlider.swift */; };
@@ -62,6 +63,7 @@
 		87757A6C19E6894161898A9D /* Fribidi.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 45C37E9DC289A7A71DEC3A06 /* Fribidi.xcframework */; };
 		8943A199DF81EC6654011D0B /* MusicCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0987A73D334B534DC10BFB /* MusicCacheService.swift */; };
 		89FC79C5C2B098D036589A46 /* PrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29C5648FE03DE35D234D18B0 /* PrivacySettingsView.swift */; };
+		8CAB2E89E420CDFB138E7CB7 /* ServerConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AC29BC1935AC6B9765F938E /* ServerConnectionTests.swift */; };
 		8CDAD3E065E9A892812AB272 /* VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06814EB19C8CAFBE0D8334A0 /* VideoPlayerView.swift */; };
 		90A2A489E1D3AE8A22600176 /* MpvVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66E2F478B629192B8B9D6E9B /* MpvVideoPlayerView.swift */; };
 		91C737F8AAAE291BE7075194 /* Mpv.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 738ACD88AE2A2C86278EA340 /* Mpv.xcframework */; };
@@ -79,6 +81,7 @@
 		B1CFF50A53C6D922C07C0E25 /* PlayerSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E818D0EF554DC7D02A5C61EC /* PlayerSettings.swift */; };
 		B9DC5E16CE402F0BB9DF2BE5 /* MusicAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60B6F6704BBCAF18BC36D3D /* MusicAudioPlayer.swift */; };
 		B9EFD71E01168DC5E7F1B4F5 /* MpvMetalViewContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DDBBD322A5ACE94504118D /* MpvMetalViewContainer.swift */; };
+		BED3E7772C762DD54167D79A /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5B10EDC009BBD952DFEF9DA /* TestSupport.swift */; };
 		BF61A9D9879676B81338CDFA /* UsersManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93FDF62AA4F20EF106957AA1 /* UsersManagementView.swift */; };
 		C0BBFB2AB68C18F3461F5483 /* MusicCacheView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84639C515B1B9C7F43B5CA9D /* MusicCacheView.swift */; };
 		C54934E8F8DEDCDF583A96AF /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EE2CFE2A07F6C1BB958B757 /* APIClient.swift */; };
@@ -103,10 +106,21 @@
 		FAF54B3A4C2AB6D756C561F0 /* Harfbuzz.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08261B2BBF7918789FE124A0 /* Harfbuzz.xcframework */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		E4542B07ECE836D29C7438E4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6C8B7DC2B181DF4E176B4FB6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 81B343C5DDC8093504C4D59B;
+			remoteInfo = FryfrogHub;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		0035B7B236BF96FEB3C54A5C /* Ass.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Ass.xcframework; path = Vendor/Ass.xcframework; sourceTree = "<group>"; };
 		06814EB19C8CAFBE0D8334A0 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
 		08261B2BBF7918789FE124A0 /* Harfbuzz.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Harfbuzz.xcframework; path = Vendor/Harfbuzz.xcframework; sourceTree = "<group>"; };
+		0AC29BC1935AC6B9765F938E /* ServerConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerConnectionTests.swift; sourceTree = "<group>"; };
 		0C4DDB6FC389D560863F61A9 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		0D24EE828934E78B5991410F /* VideoDetailModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoDetailModels.swift; sourceTree = "<group>"; };
 		163F9E05822B180E08353CAD /* MetadataEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataEditView.swift; sourceTree = "<group>"; };
@@ -122,7 +136,9 @@
 		2F0987A73D334B534DC10BFB /* MusicCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicCacheService.swift; sourceTree = "<group>"; };
 		2F36AFD0631561C254B91777 /* SystemVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemVideoPlayerView.swift; sourceTree = "<group>"; };
 		2F76E623D79EA37017BD0711 /* Avutil.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Avutil.xcframework; path = Vendor/Avutil.xcframework; sourceTree = "<group>"; };
+		32DC25FD263036461F4A5762 /* APIClientFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientFallbackTests.swift; sourceTree = "<group>"; };
 		369C0A1B39D4E6319D978C2D /* CoverSelectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverSelectView.swift; sourceTree = "<group>"; };
+		392CB90FF39227B7A35ED8EA /* FryfrogHubTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FryfrogHubTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3BE1E04D4871E4F36CD9F3BC /* SupportDeveloperView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportDeveloperView.swift; sourceTree = "<group>"; };
 		3E9C01908A3BE8404B448257 /* AuthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthModels.swift; sourceTree = "<group>"; };
 		4113404225F345D70004AA87 /* PrivacySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySettings.swift; sourceTree = "<group>"; };
@@ -198,6 +214,7 @@
 		F075F584428206D26F6FCEB0 /* ThemeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeSettings.swift; sourceTree = "<group>"; };
 		F47497CBB4121B1D5CE6C708 /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
 		F4C5F695091BA405C27FAB48 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+		F5B10EDC009BBD952DFEF9DA /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
 		F6577668BEF1D9DEB8F341C4 /* FlatSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlatSlider.swift; sourceTree = "<group>"; };
 		FB084BCB791F051EC6F5F80B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		FE447BEA1FC54E30BCF9DF2E /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
@@ -245,6 +262,7 @@
 			isa = PBXGroup;
 			children = (
 				94C93B96DF23D80A6E757E0E /* FryfrogHub */,
+				A5A65006D330F76942145423 /* FryfrogHubTests */,
 				C0DFF1917CDF03471A370A30 /* Frameworks */,
 				86AF207E6CEDB3F11403F699 /* Products */,
 			);
@@ -320,6 +338,7 @@
 			isa = PBXGroup;
 			children = (
 				CEA8E8D194D897C134906DB8 /* FryfrogHub.app */,
+				392CB90FF39227B7A35ED8EA /* FryfrogHubTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -375,6 +394,16 @@
 				06814EB19C8CAFBE0D8334A0 /* VideoPlayerView.swift */,
 			);
 			path = Player;
+			sourceTree = "<group>";
+		};
+		A5A65006D330F76942145423 /* FryfrogHubTests */ = {
+			isa = PBXGroup;
+			children = (
+				32DC25FD263036461F4A5762 /* APIClientFallbackTests.swift */,
+				0AC29BC1935AC6B9765F938E /* ServerConnectionTests.swift */,
+				F5B10EDC009BBD952DFEF9DA /* TestSupport.swift */,
+			);
+			path = FryfrogHubTests;
 			sourceTree = "<group>";
 		};
 		B2E335A22BC3887442700261 /* Views */ = {
@@ -490,6 +519,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		60432E3F3027F24E6F2E22CE /* FryfrogHubTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6ADDF2B5AF1A9A84780C213F /* Build configuration list for PBXNativeTarget "FryfrogHubTests" */;
+			buildPhases = (
+				86EF6B0DEE632737C0C07975 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				92FDDCA9C2BE4C797052F5EF /* PBXTargetDependency */,
+			);
+			name = FryfrogHubTests;
+			packageProductDependencies = (
+			);
+			productName = FryfrogHubTests;
+			productReference = 392CB90FF39227B7A35ED8EA /* FryfrogHubTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		81B343C5DDC8093504C4D59B /* FryfrogHub */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9F439988C78050606621CD4C /* Build configuration list for PBXNativeTarget "FryfrogHub" */;
@@ -540,6 +587,7 @@
 			projectRoot = "";
 			targets = (
 				81B343C5DDC8093504C4D59B /* FryfrogHub */,
+				60432E3F3027F24E6F2E22CE /* FryfrogHubTests */,
 			);
 		};
 /* End PBXProject section */
@@ -660,9 +708,40 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		86EF6B0DEE632737C0C07975 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4442033807D85BEC677B56B3 /* APIClientFallbackTests.swift in Sources */,
+				8CAB2E89E420CDFB138E7CB7 /* ServerConnectionTests.swift in Sources */,
+				BED3E7772C762DD54167D79A /* TestSupport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		92FDDCA9C2BE4C797052F5EF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 81B343C5DDC8093504C4D59B /* FryfrogHub */;
+			targetProxy = E4542B07ECE836D29C7438E4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		035347088EBA0AF3C7BBFABF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fryfrog.hub.tests;
+				PRODUCT_NAME = FryfrogHubTests;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FryfrogHub.app/FryfrogHub";
+			};
+			name = Release;
+		};
 		0736216A7F320818C91AA042 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -676,6 +755,7 @@
 				DEVELOPMENT_TEAM = 77FLQLNAN3;
 				ENABLE_BITCODE = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"Vendor\"",
@@ -713,6 +793,19 @@
 			buildSettings = {
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		F4A7D23485240B3DF4002E17 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fryfrog.hub.tests;
+				PRODUCT_NAME = FryfrogHubTests;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FryfrogHub.app/FryfrogHub";
 			};
 			name = Debug;
 		};
@@ -762,6 +855,15 @@
 			buildConfigurations = (
 				6DF895D37C34823A02A8B7BE /* Debug */,
 				59C9424285A368690AC2EF52 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6ADDF2B5AF1A9A84780C213F /* Build configuration list for PBXNativeTarget "FryfrogHubTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F4A7D23485240B3DF4002E17 /* Debug */,
+				035347088EBA0AF3C7BBFABF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -76,16 +76,19 @@ actor APIClient: APIClientProtocol {
     /// 连接配置（T3-1：可注入替身；默认全局单例）
     private let server: any ServerConnectionProtocol
 
-    private let session: URLSession = {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
-        return URLSession(configuration: config)
-    }()
+    private let session: URLSession
 
     /// T3-1：默认使用全局连接配置；测试可注入替身
-    init(server: any ServerConnectionProtocol = ServerConnection.shared) {
+    /// T3-2：支持注入 URLSessionConfiguration（挂 URLProtocol 桩做确定性单测）
+    init(
+        server: any ServerConnectionProtocol = ServerConnection.shared,
+        sessionConfiguration: URLSessionConfiguration = .default
+    ) {
         self.server = server
+        let config = sessionConfiguration
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        session = URLSession(configuration: config)
     }
 
     func setToken(_ token: String?) {

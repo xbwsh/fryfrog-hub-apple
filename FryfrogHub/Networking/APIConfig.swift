@@ -76,7 +76,10 @@ final class ServerConnection: ServerConnectionProtocol {
     /// 旧版单一地址存储键（迁移用）
     private static let legacyBaseURLKey = "serverBaseURL"
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+
+    /// 探测会话（T3-2 测试注入点；生产使用系统共享会话）
+    var lanProbeSession: URLSession = .shared
 
     /// 协议，仅支持 http/https
     var scheme: String {
@@ -106,7 +109,9 @@ final class ServerConnection: ServerConnectionProtocol {
     /// 正在探测局域网（进度指示用）
     private(set) var isProbing = false
 
-    private init() {
+    /// T3-2：默认读取标准 UserDefaults；测试可注入隔离 suite
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         scheme = defaults.string(forKey: Keys.scheme) ?? "http"
         port = defaults.string(forKey: Keys.port) ?? "20058"
         publicHost = defaults.string(forKey: Keys.publicHost) ?? ""
@@ -205,7 +210,7 @@ extension ServerConnection {
         var request = URLRequest(url: url)
         request.timeoutInterval = timeout
         do {
-            let (_, _) = try await URLSession.shared.data(for: request)
+            let (_, _) = try await lanProbeSession.data(for: request)
             return true
         } catch {
             return false

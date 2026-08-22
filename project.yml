@@ -97,6 +97,8 @@ targets:
       configs:
         Debug:
           DEBUG_INFORMATION_FORMAT: dwarf
+          # @testable import 需要（XcodeGen 不会像 Xcode 模板那样默认开启）
+          ENABLE_TESTABILITY: YES
         Release:
           DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
           SWIFT_COMPILATION_MODE: wholemodule
@@ -124,3 +126,33 @@ targets:
             ditto "$fw" "$DST/$name.framework"
             codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none "$DST/$name.framework" 2>/dev/null || true
           done
+
+  # T3-2：单元测试 target（依赖主 App，经 TEST_HOST 启动）
+  FryfrogHubTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - FryfrogHubTests
+    dependencies:
+      - target: FryfrogHub
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_NAME: FryfrogHubTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.fryfrog.hub.tests
+        SWIFT_VERSION: "5.9"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/FryfrogHub.app/FryfrogHub"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  FryfrogHub:
+    build:
+      targets:
+        FryfrogHub: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - FryfrogHubTests
