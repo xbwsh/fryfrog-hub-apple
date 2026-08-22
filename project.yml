@@ -65,6 +65,8 @@ targets:
           NSAllowsArbitraryLoads: true
     settings:
       base:
+        # 迁移到独立 headermap，消除传统 headermap 警告（HEADER_SEARCH_PATHS 不受影响）
+        ALWAYS_SEARCH_USER_PATHS: NO
         PRODUCT_BUNDLE_IDENTIFIER: com.fryfrog.hub
         PRODUCT_NAME: FryfrogHub
         GENERATE_INFOPLIST_FILE: NO
@@ -100,6 +102,8 @@ targets:
       # 预编译框架的 __LINKEDIT 布局无法被 bitcode_strip 处理，
       # 不走原生 Embed Frameworks 阶段，改由本脚本拷贝到 App 并签名
       - name: Embed libmpv Frameworks
+        # 框架嵌入必须每次构建都执行（无固定输出文件），声明为始终运行以消除警告
+        basedOnDependencyAnalysis: false
         script: |
           set -e
           SRC="$SRCROOT/Vendor"
