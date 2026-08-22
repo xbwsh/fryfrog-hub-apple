@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+*/.DS_Store
+
+# Xcode 构建产物（IPA 归档流程见 README，可随时重新生成）
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+*.xcuserstate
+xcuserdata/
+
+# SwiftPM（当前无第三方包管理，防御性忽略）
+.build/
+Package.resolved
+
+# AI 工具链本地产物
+.mimocode/node_modules/
+.mimocache/
+
+# 诊断输出（Diag 写入 Documents，不会出现在仓库，防御性忽略）
+diag.txt

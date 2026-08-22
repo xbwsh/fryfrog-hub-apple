@@ -1,0 +1,120 @@
+name: FryfrogHub
+options:
+  bundleIdPrefix: com.fryfrog
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+targets:
+  FryfrogHub:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - FryfrogHub
+    dependencies:
+      - framework: Vendor/Mpv.xcframework
+        embed: false
+      - framework: Vendor/Ass.xcframework
+        embed: false
+      - framework: Vendor/Avcodec.xcframework
+        embed: false
+      - framework: Vendor/Avfilter.xcframework
+        embed: false
+      - framework: Vendor/Avformat.xcframework
+        embed: false
+      - framework: Vendor/Avutil.xcframework
+        embed: false
+      - framework: Vendor/Dav1d.xcframework
+        embed: false
+      - framework: Vendor/Freetype.xcframework
+        embed: false
+      - framework: Vendor/Fribidi.xcframework
+        embed: false
+      - framework: Vendor/Harfbuzz.xcframework
+        embed: false
+      - framework: Vendor/Mbedcrypto.xcframework
+        embed: false
+      - framework: Vendor/Mbedtls.xcframework
+        embed: false
+      - framework: Vendor/Mbedx509.xcframework
+        embed: false
+      - framework: Vendor/Png16.xcframework
+        embed: false
+      - framework: Vendor/Swresample.xcframework
+        embed: false
+      - framework: Vendor/Swscale.xcframework
+        embed: false
+      - framework: Vendor/Uchardet.xcframework
+        embed: false
+      - framework: Vendor/Xml2.xcframework
+        embed: false
+    info:
+      path: FryfrogHub/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Fryfrog Hub
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - audio
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fryfrog.hub
+        PRODUCT_NAME: FryfrogHub
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        # 必须匹配 Xcode 已登录账号：当前只登录了免费个人团队 77FLQLNAN3
+        # （本机唯一证书 OU 与描述文件均为该团队；CUB7NCT6C8 付费账号未登录会导致签名失败）
+        DEVELOPMENT_TEAM: 77FLQLNAN3
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # libmpv 各框架的 __LINKEDIT 布局不被 bitcode_strip 支持，关闭 bitcode 避免嵌入阶段报错
+        ENABLE_BITCODE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "0.1.0"
+        ENABLE_PREVIEWS: YES
+        # libmpv C 头文件（Swift 桥接用）
+        HEADER_SEARCH_PATHS:
+          - "$(PROJECT_DIR)/Vendor/Headers"
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+          - "@loader_path/../Frameworks"
+        SWIFT_OBJC_BRIDGING_HEADER: "$(PROJECT_DIR)/FryfrogHub/FryfrogHub-Bridging-Header.h"
+      configs:
+        Debug:
+          DEBUG_INFORMATION_FORMAT: dwarf
+        Release:
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+          SWIFT_COMPILATION_MODE: wholemodule
+    postBuildScripts:
+      # 预编译框架的 __LINKEDIT 布局无法被 bitcode_strip 处理，
+      # 不走原生 Embed Frameworks 阶段，改由本脚本拷贝到 App 并签名
+      - name: Embed libmpv Frameworks
+        script: |
+          set -e
+          SRC="$SRCROOT/Vendor"
+          DST="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
+          if [ "$PLATFORM_NAME" = "iphonesimulator" ]; then
+            SLICE="ios-arm64_x86_64-simulator"
+          else
+            SLICE="ios-arm64"
+          fi
+          mkdir -p "$DST"
+          for xfw in "$SRC"/*.xcframework; do
+            name="$(basename "$xfw" .xcframework)"
+            fw="$xfw/$SLICE/$name.framework"
+            [ -d "$fw" ] || continue
+            rm -rf "$DST/$name.framework"
+            ditto "$fw" "$DST/$name.framework"
+            codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none "$DST/$name.framework" 2>/dev/null || true
+          done

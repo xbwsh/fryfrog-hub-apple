@@ -1,0 +1,211 @@
+import Foundation
+import Observation
+
+struct CachedSongInfo: Identifiable, Hashable {
+    let id: Int64
+    let title: String
+    let artistName: String?
+    let fileSize: Int64
+    let modifiedDate: Date
+    let fileURL: URL
+}
+
+@Observable
+@MainActor
+final class MusicCacheService {
+    static let shared = MusicCacheService()
+
+    private(set) var cachedSongs: [CachedSongInfo] = []
+    private(set) var totalBytes: Int64 = 0
+    private(set) var isLoading = false
+
+    private let fileManager = FileManager.default
+
+    var cacheDirectory: URL {
+        let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        return caches.appendingPathComponent("MusicCache", isDirectory: true)
+    }
+
+    private var metadataURL: URL { cacheDirectory.appendingPathComponent("metadata.json") }
+
+    private init() {
+        try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        refresh()
+    }
+
+    private func loadMetadata() -> [String: [String: String]] {
+        guard let data = try? Data(contentsOf: metadataURL),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: String]] else { return [:] }
+        return obj
+    }
+
+    private func saveMetadata(for song: MusicSong) {
+        var meta = loadMetadata()
+        meta["\(song.id)"] = [
+            "title": song.title,
+            "artist": song.artistName ?? "",
+            "album": song.albumName ?? ""
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: meta, options: .prettyPrinted) {
+            try? data.write(to: metadataURL)
+        }
+    }
+
+    private func removeMetadata(for id: Int64) {
+        var meta = loadMetadata()
+        meta.removeValue(forKey: "\(id)")
+        if let data = try? JSONSerialization.data(withJSONObject: meta, options: .prettyPrinted) {
+            try? data.write(to: metadataURL)
+        }
+    }
+
+    func refresh() {
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: cacheDirectory,
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
+            options: .skipsHiddenFiles
+        ) else {
+            cachedSongs = []
+            totalBytes = 0
+            return
+        }
+        let metadata = loadMetadata()
+        var infos: [CachedSongInfo] = []
+        var total: Int64 = 0
+        for url in urls {
+            if url.lastPathComponent == "metadata.json" { continue }
+            guard let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
+                  let size = values.fileSize,
+                  let date = values.contentModificationDate else { continue }
+            let name = url.deletingPathExtension().lastPathComponent
+            guard let id = Int64(name) else { continue }
+            var title = metadata["\(id)"]?["title"]
+            var artist = metadata["\(id)"]?["artist"]
+            if title == nil || title == name {
+                if let known = MusicService.shared.songs.first(where: { $0.id == id }) {
+                    title = known.title
+                    if artist == nil || artist?.isEmpty == true { artist = known.artistName }
+                }
+            }
+            let displayTitle = (title?.isEmpty == false) ? title! : name
+            let displayArtist = (artist?.isEmpty == false) ? artist : nil
+            infos.append(CachedSongInfo(id: id, title: displayTitle, artistName: displayArtist, fileSize: Int64(size), modifiedDate: date, fileURL: url))
+            total += Int64(size)
+        }
+        cachedSongs = infos.sorted { $0.modifiedDate > $1.modifiedDate }
+        totalBytes = total
+    }
+
+    func formattedTotal() -> String {
+        ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+    }
+
+    func cachedFileURL(for song: MusicSong) -> URL? {
+        let ext = (song.format?.lowercased() ?? "mp3").replacingOccurrences(of: ".", with: "")
+        let fileName = "\(song.id).\(ext.isEmpty ? "mp3" : ext)"
+        let url = cacheDirectory.appendingPathComponent(fileName)
+        // also support legacy id-only without ext
+        if fileManager.fileExists(atPath: url.path) { return url }
+        let legacy = cacheDirectory.appendingPathComponent("\(song.id)")
+        if fileManager.fileExists(atPath: legacy.path) { return legacy }
+        // check any file with prefix id.
+        if let urls = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil) {
+            for u in urls where u.lastPathComponent.hasPrefix("\(song.id).") {
+                return u
+            }
+        }
+        return nil
+    }
+
+    func isCached(_ song: MusicSong) -> Bool {
+        // 依赖 @Observable 的 cachedSongs，使 SwiftUI 视图在 refresh() 后自动重算
+        // 避免直接 fileExists 导致视图不观测不到变化，需手动刷新
+        if cachedSongs.contains(where: { $0.id == song.id }) { return true }
+        // 兜底：首次启动或外部文件变动时 cachedSongs 尚未同步
+        return cachedFileURL(for: song) != nil
+    }
+
+    func localPlaybackURL(for song: MusicSong) -> URL? {
+        guard let url = cachedFileURL(for: song), fileManager.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+
+    func cacheDirectoryURL() -> URL { cacheDirectory }
+
+    @discardableResult
+    func download(song: MusicSong) async throws -> URL {
+        guard let remote = song.streamURL else { throw URLError(.badURL) }
+        var request = URLRequest(url: remote)
+        if let token = await APIClient.shared.currentToken, !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (tempURL, response) = try await URLSession.shared.download(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        try fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        let ext = (song.format?.lowercased() ?? "mp3").replacingOccurrences(of: ".", with: "")
+        let fileName = "\(song.id).\(ext.isEmpty ? "mp3" : ext)"
+        let dest = cacheDirectory.appendingPathComponent(fileName)
+        if fileManager.fileExists(atPath: dest.path) {
+            try? fileManager.removeItem(at: dest)
+        }
+        try fileManager.moveItem(at: tempURL, to: dest)
+        saveMetadata(for: song)
+        enforceLimitIfNeeded()
+        refresh()
+        return dest
+    }
+
+    func remove(song: MusicSong) {
+        guard let url = cachedFileURL(for: song) else { return }
+        try? fileManager.removeItem(at: url)
+        removeMetadata(for: song.id)
+        refresh()
+    }
+
+    func remove(info: CachedSongInfo) {
+        try? fileManager.removeItem(at: info.fileURL)
+        removeMetadata(for: info.id)
+        refresh()
+    }
+
+    func clearAll() {
+        try? fileManager.removeItem(at: cacheDirectory)
+        try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        refresh()
+    }
+
+    func enforceLimit() {
+        enforceLimitIfNeeded()
+    }
+
+    private func enforceLimitIfNeeded() {
+        let maxBytes = MusicCacheSettings.shared.maxBytes
+        guard maxBytes != Int64.max else { return }
+        var total = totalBytes
+        // refresh current total first
+        if let urls = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) {
+            var files: [(url: URL, date: Date, size: Int64)] = []
+            var sum: Int64 = 0
+            for url in urls {
+                guard let v = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
+                      let s = v.fileSize, let d = v.contentModificationDate else { continue }
+                files.append((url, d, Int64(s)))
+                sum += Int64(s)
+            }
+            total = sum
+            if total <= maxBytes { return }
+            for f in files.sorted(by: { $0.date < $1.date }) {
+                if total <= maxBytes { break }
+                try? fileManager.removeItem(at: f.url)
+                if f.url.lastPathComponent != "metadata.json" {
+                    let name = f.url.deletingPathExtension().lastPathComponent
+                    if let id = Int64(name) { removeMetadata(for: id) }
+                }
+                total -= f.size
+            }
+        }
+        refresh()
+    }
+}
