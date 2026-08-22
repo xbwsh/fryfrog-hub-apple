@@ -128,8 +128,12 @@ final class AuthImageLoader {
     /// 下载并发闸门：actor/continuation 挂起实现，替代 DispatchSemaphore——
     /// 后者在 Task.detached 内 wait 会阻塞协作线程池线程，有优先级反转风险
     private let downloadGate = AsyncSemaphore(limit: 4)
+    /// T3-1：客户端经协议注入，消除对 APIClient.shared 的硬编码依赖
+    private let client: any APIClientProtocol
 
-    private init() {}
+    init(client: any APIClientProtocol = APIClient.shared) {
+        self.client = client
+    }
 
     func cached(url: URL) -> UIImage? {
         store.cache[url.path]
@@ -153,7 +157,7 @@ final class AuthImageLoader {
         do {
             let data: Data = try await downloadGate.withPermit {
                 var request = URLRequest(url: url)
-                let token = await APIClient.shared.currentToken
+                let token = await client.currentToken
                 if let token {
                     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
                 }

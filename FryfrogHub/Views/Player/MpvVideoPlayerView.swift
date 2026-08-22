@@ -1144,7 +1144,7 @@ struct MpvVideoPlayerView: View {
 
         // 并行：进度和 token 同时请求，减少等待时间
         let progressTask = Task { await service.fetchProgress(id: videoId) }
-        let token = await APIClient.shared.currentToken
+        let token = await service.authToken()
 
         var headers: [String: String] = [:]
         if let token {
@@ -1201,8 +1201,7 @@ struct MpvVideoPlayerView: View {
             // 播放前优先拉取新鲜签名；失败则回退到传入的 streamUrl 或本地拼接（预览兜底）。
             var freshStreamUrl: String? = streamUrl
             do {
-                let resp: ApiResponse<VideoDTO> = try await APIClient.shared.request("/api/v1/video/\(videoId)")
-                if let s = resp.data?.streamUrl, !s.isEmpty {
+                if let s = try await service.freshStreamPath(id: videoId), !s.isEmpty {
                     freshStreamUrl = s
                     MPVLog.log("fresh streamUrl fetched for \(videoId)")
                 }

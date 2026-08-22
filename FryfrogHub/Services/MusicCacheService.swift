@@ -28,7 +28,11 @@ final class MusicCacheService {
 
     private var metadataURL: URL { cacheDirectory.appendingPathComponent("metadata.json") }
 
-    private init() {
+    /// T3-1：客户端经协议注入，消除对 APIClient.shared 的硬编码依赖
+    private let client: any APIClientProtocol
+
+    init(client: any APIClientProtocol = APIClient.shared) {
+        self.client = client
         try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         refresh()
     }
@@ -136,7 +140,7 @@ final class MusicCacheService {
     func download(song: MusicSong) async throws -> URL {
         guard let remote = song.streamURL else { throw URLError(.badURL) }
         var request = URLRequest(url: remote)
-        if let token = await APIClient.shared.currentToken, !token.isEmpty {
+        if let token = await client.currentToken, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         let (tempURL, response) = try await URLSession.shared.download(for: request)

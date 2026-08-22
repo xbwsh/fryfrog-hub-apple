@@ -6,7 +6,9 @@ import UIKit
 final class AuthService {
     static let shared = AuthService()
 
-    private let client = APIClient.shared
+    private let client: any APIClientProtocol
+    /// 预留：与其它 Service 统一注入契约（当前方法未直接使用）
+    private let server: any ServerConnectionProtocol
     private let tokenStore = TokenStore.shared
     private let defaults = UserDefaults.standard
 
@@ -17,7 +19,10 @@ final class AuthService {
     private(set) var isAuthenticated = false
     private(set) var currentUser: User?
 
-    private init() {
+    /// T3-1：默认单例入口；测试可注入协议替身
+    init(client: any APIClientProtocol = APIClient.shared, server: any ServerConnectionProtocol = ServerConnection.shared) {
+        self.client = client
+        self.server = server
         // 任何业务请求返回 401 时，全局清除会话回到登录页
         Task {
             await client.setUnauthorizedHandler { [weak self] in

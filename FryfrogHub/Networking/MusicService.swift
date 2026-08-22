@@ -10,7 +10,8 @@ struct MusicScanResult: Decodable {
 final class MusicService {
     static let shared = MusicService()
 
-    private let client = APIClient.shared
+    private let client: any APIClientProtocol
+    private let server: any ServerConnectionProtocol
     private(set) var groups: [MusicLibraryGroup] = []
     private(set) var selectedAlbum: MusicAlbum?
     private(set) var selectedArtist: MusicArtist?
@@ -19,7 +20,11 @@ final class MusicService {
     private(set) var isLoading = false
     var errorMessage: String?
 
-    private init() {}
+    /// T3-1：默认单例入口；测试可注入协议替身
+    init(client: any APIClientProtocol = APIClient.shared, server: any ServerConnectionProtocol = ServerConnection.shared) {
+        self.client = client
+        self.server = server
+    }
 
     func loadHome() async {
         guard groups.isEmpty else { return }
@@ -93,7 +98,7 @@ final class MusicService {
 
     func fetchLyrics(for song: MusicSong) async -> String? {
         guard let lyricsUrl = song.lyricsUrl,
-              let url = ServerConnection.shared.imageURL(for: lyricsUrl) else { return nil }
+              let url = server.imageURL(for: lyricsUrl) else { return nil }
         do {
             var request = URLRequest(url: url)
             if let token = await client.currentToken, !token.isEmpty {

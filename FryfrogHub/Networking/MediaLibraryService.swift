@@ -5,13 +5,19 @@ import Observation
 final class MediaLibraryService {
     static let shared = MediaLibraryService()
 
-    private let client = APIClient.shared
+    private let client: any APIClientProtocol
+    /// 预留：与其它 Service 统一注入契约（当前方法未直接使用）
+    private let server: any ServerConnectionProtocol
 
     private(set) var libraries: [MediaLibrary] = []
     private(set) var isLoading = false
     var errorMessage: String?
 
-    private init() {}
+    /// T3-1：默认单例入口；测试可注入协议替身
+    init(client: any APIClientProtocol = APIClient.shared, server: any ServerConnectionProtocol = ServerConnection.shared) {
+        self.client = client
+        self.server = server
+    }
 
     /// 拉取所有资源库
     func fetchLibraries() async {

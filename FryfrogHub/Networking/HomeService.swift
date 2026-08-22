@@ -5,7 +5,9 @@ import Observation
 final class HomeService {
     static let shared = HomeService()
 
-    private let client = APIClient.shared
+    private let client: any APIClientProtocol
+    /// 预留：与其它 Service 统一注入契约（当前方法未直接使用）
+    private let server: any ServerConnectionProtocol
 
     private(set) var groups: [LibrarySeriesGroup] = []
     private(set) var isLoading = false
@@ -14,7 +16,11 @@ final class HomeService {
     /// 随机化后的轮播池缓存：只在数据刷新/隐私切换时重掷，避免 body 频繁重算导致乱跳
     private var cachedCarousel: [SeriesListDTO] = []
 
-    private init() {}
+    /// T3-1：默认单例入口；测试可注入协议替身
+    init(client: any APIClientProtocol = APIClient.shared, server: any ServerConnectionProtocol = ServerConnection.shared) {
+        self.client = client
+        self.server = server
+    }
 
     /// 拉取按资源库分组的系列数据
     func fetchHomeContent() async {

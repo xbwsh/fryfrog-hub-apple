@@ -1,9 +1,80 @@
 import Foundation
 
-actor APIClient {
+/// API 客户端抽象（T3-1）：Service 层面向协议依赖，可注入 Mock 便于单元测试。
+/// 要求均声明为 async——actor 隔离实现可直接满足，外部经 `any` 持有调用语法不变。
+protocol APIClientProtocol: Sendable {
+    /// 设置/清除 Bearer token（登录后设置、登出时置 nil）
+    func setToken(_ token: String?) async
+    var currentToken: String? { get async }
+    /// token 被服务器拒绝（401）时回调（由 AuthService 注入）
+    func setUnauthorizedHandler(_ handler: @escaping () async -> Void) async
+    /// 无权限（403）时回调
+    func setForbiddenHandler(_ handler: @escaping () async -> Void) async
+    /// 发起请求并解码为指定类型（含内外网失败切换与全局 401/403 处理）
+    func request<T: Decodable>(
+        _ path: String,
+        method: String,
+        body: AnyEncodable?,
+        queryItems: [URLQueryItem]
+    ) async throws -> T
+    /// 发起请求但不关心返回值
+    func requestVoid(
+        _ path: String,
+        method: String,
+        body: AnyEncodable?,
+        queryItems: [URLQueryItem]
+    ) async throws
+}
+
+// 协议要求不能声明默认参数值；经 `any` 持有时具体实现的默认值不可见，
+// 以下扩展按现有调用形态补齐常用重载，转发到完整要求（默认值与原实现一致）
+extension APIClientProtocol {
+    func request<T: Decodable>(_ path: String) async throws -> T {
+        try await request(path, method: "GET", body: nil, queryItems: [])
+    }
+
+    func request<T: Decodable>(_ path: String, method: String) async throws -> T {
+        try await request(path, method: method, body: nil, queryItems: [])
+    }
+
+    func request<T: Decodable>(
+        _ path: String,
+        queryItems: [URLQueryItem]
+    ) async throws -> T {
+        try await request(path, method: "GET", body: nil, queryItems: queryItems)
+    }
+
+    func request<T: Decodable>(
+        _ path: String,
+        method: String,
+        body: AnyEncodable?
+    ) async throws -> T {
+        try await request(path, method: method, body: body, queryItems: [])
+    }
+
+    func request<T: Decodable>(
+        _ path: String,
+        method: String,
+        queryItems: [URLQueryItem]
+    ) async throws -> T {
+        try await request(path, method: method, body: nil, queryItems: queryItems)
+    }
+
+    func requestVoid(
+        _ path: String,
+        method: String
+    ) async throws {
+        try await requestVoid(path, method: method, body: nil, queryItems: [])
+    }
+}
+
+actor APIClient: APIClientProtocol {
     static let shared = APIClient()
 
     private var token: String?
+
+    /// 连接配置（T3-1：可注入替身；默认全局单例）
+    private let server: any ServerConnectionProtocol
 
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
@@ -12,7 +83,10 @@ actor APIClient {
         return URLSession(configuration: config)
     }()
 
-    private init() {}
+    /// T3-1：默认使用全局连接配置；测试可注入替身
+    init(server: any ServerConnectionProtocol = ServerConnection.shared) {
+        self.server = server
+    }
 
     func setToken(_ token: String?) {
         self.token = token
@@ -57,24 +131,24 @@ actor APIClient {
         body: AnyEncodable? = nil,
         queryItems: [URLQueryItem] = []
     ) async throws -> T {
-        let server = ServerConnection.shared
-        guard let baseURL = server.baseURL else {
+        let conn = server
+        guard let baseURL = conn.baseURL else {
             throw APIError.invalidURL
         }
-        let mode = server.effectiveMode
+        let mode = conn.effectiveMode
 
         do {
             return try await perform(path, method: method, body: body, queryItems: queryItems, baseURL: baseURL)
         } catch let originalError {
             guard isConnectionFailure(originalError),
-                  let alternateString = server.alternateURLString(for: mode),
+                  let alternateString = conn.alternateURLString(for: mode),
                   let alternateURL = URL(string: alternateString),
                   alternateURL != baseURL else {
                 throw originalError
             }
             do {
                 let result: T = try await perform(path, method: method, body: body, queryItems: queryItems, baseURL: alternateURL)
-                await server.setActiveMode(server.alternateMode(for: mode))
+                await conn.setActiveMode(conn.alternateMode(for: mode))
                 return result
             } catch {
                 throw originalError

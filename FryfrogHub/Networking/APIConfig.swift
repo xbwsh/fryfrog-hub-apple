@@ -27,11 +27,42 @@ enum HostValidator {
     }
 }
 
+/// 服务器连接抽象（T3-1）：APIClient 与业务层面向协议依赖，可注入测试替身
+protocol ServerConnectionProtocol: AnyObject {
+    /// 当前请求应使用的连接方式（未配置局域网时强制走公网）
+    var effectiveMode: ServerConnectionMode { get }
+    /// 当前生效的完整地址（未配置时为空字符串）
+    var activeURLString: String { get }
+    /// 当前生效的基础 URL
+    var baseURL: URL? { get }
+    /// 构造某连接方式的完整地址；主机未配置或端口非法时返回 nil
+    func urlString(for mode: ServerConnectionMode) -> String?
+    /// 备选连接方式的完整地址（未配置时 nil）
+    func alternateURLString(for mode: ServerConnectionMode) -> String?
+    /// 另一个（备选）连接方式
+    func alternateMode(for mode: ServerConnectionMode) -> ServerConnectionMode
+    /// 相对路径拼接为完整 URL
+    func imageURL(for path: String?) -> URL?
+    /// 切换当前生效的连接方式
+    func setActiveMode(_ mode: ServerConnectionMode) async
+    /// 探测局域网是否可达（短超时）
+    func probeLAN(timeout: TimeInterval) async -> Bool
+    /// 重新评估连接方式：局域网优先，不通则退回公网
+    func refreshActiveMode() async
+}
+
+extension ServerConnectionProtocol {
+    /// 协议要求不能带默认参数，经扩展补齐无参调用糖（与实现默认值一致：3s）
+    func probeLAN() async -> Bool {
+        await probeLAN(timeout: 3)
+    }
+}
+
 /// 服务器连接配置（持久化到 UserDefaults，支持 IPv6 如 `http://[2409:...]:20058`）
 /// 可同时配置公网（域名）与局域网地址，两者共用协议与端口；
 /// 优先使用局域网，局域网连不通时自动切换到公网。
 @Observable
-final class ServerConnection {
+final class ServerConnection: ServerConnectionProtocol {
     static let shared = ServerConnection()
 
     private enum Keys {

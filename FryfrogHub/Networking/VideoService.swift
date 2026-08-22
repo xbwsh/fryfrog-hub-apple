@@ -15,7 +15,8 @@ struct SubtitleFile: Codable, Identifiable {
 final class VideoService {
     static let shared = VideoService()
 
-    private let client = APIClient.shared
+    private let client: any APIClientProtocol
+    private let server: any ServerConnectionProtocol
 
     private(set) var isLoading = false
     private(set) var detail: SeriesDTO?
@@ -23,7 +24,11 @@ final class VideoService {
     private(set) var actors: [VideoActor] = []
     var errorMessage: String?
 
-    private init() {}
+    /// T3-1：默认单例入口；测试可注入协议替身
+    init(client: any APIClientProtocol = APIClient.shared, server: any ServerConnectionProtocol = ServerConnection.shared) {
+        self.client = client
+        self.server = server
+    }
 
     /// 清空上次数据（详情页每次进入重新拉取）
     func reset() {
@@ -95,7 +100,20 @@ final class VideoService {
 
     /// 原画流播放地址（直连，不做转码）
     func streamURL(id: Int64) -> URL {
-        URL(string: ServerConnection.shared.activeURLString + "/api/v1/video/\(id)/stream")!
+        URL(string: server.activeURLString + "/api/v1/video/\(id)/stream")!
+    }
+
+    /// 拉取视频详情中的新鲜签名流地址（播放前刷新，签名 7 天过期且与密钥绑定）
+    /// T3-1：供播放器视图经 Service 访问，避免视图层硬编码 APIClient.shared
+    func freshStreamPath(id: Int64) async throws -> String? {
+        let response: ApiResponse<VideoDTO> = try await client.request("/api/v1/video/\(id)")
+        return response.data?.streamUrl
+    }
+
+    /// 当前会话 token（播放器为 mpv/AVPlayer 请求头读取）
+    /// T3-1：同上，收敛视图层对客户端单例的直接依赖
+    func authToken() async -> String? {
+        await client.currentToken
     }
 
     /// 拉取外挂字幕列表（url 为后端返回的签名地址，禁止改写，直接拼接/透传）
@@ -106,7 +124,7 @@ final class VideoService {
                 SubtitleFile(
                     filename: file.filename,
                     language: file.language,
-                    url: file.url.flatMap { ServerConnection.shared.imageURL(for: $0)?.absoluteString }
+                    url: file.url.flatMap { server.imageURL(for: $0)?.absoluteString }
                 )
             }
         } catch {

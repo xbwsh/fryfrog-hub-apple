@@ -72,10 +72,8 @@ struct SystemVideoPlayerView: View {
 
         // 优先拉取新鲜签名，避免列表缓存的 7 天签名因密钥轮转失效
         var freshStreamUrl: String? = streamUrl
-        if let resp: ApiResponse<VideoDTO> = try? await APIClient.shared.request("/api/v1/video/\(videoId)") {
-            if let s = resp.data?.streamUrl, !s.isEmpty {
-                freshStreamUrl = s
-            }
+        if let s = try? await service.freshStreamPath(id: videoId), !s.isEmpty {
+            freshStreamUrl = s
         }
         var url = service.streamURL(id: videoId)
         if let freshStreamUrl, let resolved = ServerConnection.shared.imageURL(for: freshStreamUrl) {
@@ -85,7 +83,7 @@ struct SystemVideoPlayerView: View {
         }
         let headerFieldsKey = "AVURLAssetHTTPHeaderFieldsKey"
         var options: [String: Any] = [:]
-        if let token = await APIClient.shared.currentToken {
+        if let token = await service.authToken() {
             options[headerFieldsKey] = ["Authorization": "Bearer \(token)"]
         }
         let asset = AVURLAsset(url: url, options: options)
