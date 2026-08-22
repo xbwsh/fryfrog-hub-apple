@@ -65,12 +65,12 @@ struct MpvVideoPlayerView: View {
             Color.black.ignoresSafeArea()
             if let player {
                 if let videoSize, videoSize.height > 0 {
-                    MpvMetalViewContainer(player: player, videoSize: $videoSize, onFailure: handleRenderFailure)
+                    MpvMetalViewContainer(player: player, videoSize: $videoSize, controlsVisible: controlsVisible, onFailure: handleRenderFailure)
                         .aspectRatio(videoSize.width / videoSize.height, contentMode: .fit)
                         .ignoresSafeArea()
                 } else {
                     // 视频尺寸未就绪前先铺满黑屏
-                    MpvMetalViewContainer(player: player, videoSize: $videoSize, onFailure: handleRenderFailure)
+                    MpvMetalViewContainer(player: player, videoSize: $videoSize, controlsVisible: controlsVisible, onFailure: handleRenderFailure)
                         .ignoresSafeArea()
                 }
             } else {

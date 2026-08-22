@@ -118,6 +118,13 @@ final class MpvMetalView: UIView {
         displayLink = nil
     }
 
+    /// T4-2：控件显示期间将渲染节拍降至 30fps，为控制栏淡入淡出等 UI 动画让出
+    /// 主线程余量；隐藏后恢复设备默认帧率（0 = 跟随 maximumFramesPerSecond）。
+    /// 需在 startRendering 之后调用方生效（displayLink 已创建）。
+    func setControlsVisible(_ visible: Bool) {
+        displayLink?.preferredFramesPerSecond = visible ? 30 : 0
+    }
+
     deinit {
         stopRendering()
         if let frameBuffer {
