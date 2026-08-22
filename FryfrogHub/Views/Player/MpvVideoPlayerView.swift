@@ -62,12 +62,12 @@ struct MpvVideoPlayerView: View {
             Color.black.ignoresSafeArea()
             if let player {
                 if let videoSize, videoSize.height > 0 {
-                    MpvMetalViewContainer(player: player, videoSize: $videoSize)
+                    MpvMetalViewContainer(player: player, videoSize: $videoSize, onFailure: handleRenderFailure)
                         .aspectRatio(videoSize.width / videoSize.height, contentMode: .fit)
                         .ignoresSafeArea()
                 } else {
                     // 视频尺寸未就绪前先铺满黑屏
-                    MpvMetalViewContainer(player: player, videoSize: $videoSize)
+                    MpvMetalViewContainer(player: player, videoSize: $videoSize, onFailure: handleRenderFailure)
                         .ignoresSafeArea()
                 }
             } else {
@@ -1230,6 +1230,13 @@ struct MpvVideoPlayerView: View {
         }
     }
 
+    /// Metal 渲染视图初始化失败回调（T1-2）：复用播放页错误提示 UI 展示，不崩溃
+    private func handleRenderFailure(_ message: String) {
+        guard errorMessage == nil else { return }
+        errorMessage = message
+        MPVLog.log("render failure surfaced: \(message)")
+    }
+
     /// 播放中每 15 秒周期上报一次，避免异常退出时进度丢失
     private func startCheckpointTimer() {
         checkpointTimer?.invalidate()
@@ -1392,12 +1399,20 @@ private struct HiddenVolumeView: UIViewRepresentable {
 }
 
 /// mpv 渲染视图的 SwiftUI 容器
+/// T1-2：Metal 初始化失败时不再崩溃——回退黑色占位 UIView，并把错误经 onFailure 交给播放页提示
 private struct MpvMetalViewContainer: UIViewRepresentable {
     let player: MpvPlayer
     @Binding var videoSize: CGSize?
+    var onFailure: (String) -> Void
 
-    func makeUIView(context: Context) -> MpvMetalView {
-        let view = MpvMetalView(player: player, frame: .zero)
+    func makeUIView(context: Context) -> UIView {
+        guard let view = MpvMetalView(player: player, frame: .zero) else {
+            // 延迟到下一 runloop 上报，避免视图构建期间修改 SwiftUI 状态
+            DispatchQueue.main.async {
+                onFailure("视频渲染初始化失败：当前设备 Metal 环境不可用")
+            }
+            return UIView()
+        }
         view.startRendering()
         view.onSizeChange = { size in
             videoSize = size
@@ -1409,7 +1424,7 @@ private struct MpvMetalViewContainer: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ view: MpvMetalView, context: Context) {}
+    func updateUIView(_ view: UIView, context: Context) {}
 }
 
 #Preview {

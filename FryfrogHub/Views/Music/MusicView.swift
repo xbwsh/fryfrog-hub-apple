@@ -496,7 +496,7 @@ private struct MusicSongRow: View {
                     Button {
                         Task {
                             isDownloading = true
-                            try? await cacheService.download(song: song)
+                            _ = try? await cacheService.download(song: song)
                             isDownloading = false
                         }
                     } label: {

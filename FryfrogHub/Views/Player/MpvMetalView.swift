@@ -33,21 +33,41 @@ final class MpvMetalView: UIView {
     #endif
     private static let logger = Logger(subsystem: "com.fryfrog.hub", category: "mpv-render")
 
-    init(player: MpvPlayer, frame: CGRect) {
+    /// T1-2：Metal 初始化改为可失败——设备缺失/命令队列失败/着色器或管线编译失败时返回 nil
+    /// 并记录日志，由上层（MpvMetalViewContainer）回退占位视图并提示错误，不再 fatalError/try! 崩溃
+    init?(player: MpvPlayer, frame: CGRect) {
         self.player = player
         guard let device = MTLCreateSystemDefaultDevice() else {
-            fatalError("Metal 不可用")
+            Self.logFailure("Metal 设备不可用（MTLCreateSystemDefaultDevice 返回 nil）")
+            return nil
         }
         self.device = device
-        commandQueue = device.makeCommandQueue()!
+        guard let commandQueue = device.makeCommandQueue() else {
+            Self.logFailure("Metal 命令队列创建失败")
+            return nil
+        }
+        self.commandQueue = commandQueue
         // 运行时编译着色器（避免依赖 Metal 工具链编译 .metal 文件）
-        let library = try! device.makeLibrary(source: Self.shaderSource, options: nil)
+        let library: MTLLibrary
+        do {
+            library = try device.makeLibrary(source: Self.shaderSource, options: nil)
+        } catch {
+            Self.logFailure("着色器库编译失败: \(error)")
+            return nil
+        }
         self.library = library
         let descriptor = MTLRenderPipelineDescriptor()
         descriptor.vertexFunction = library.makeFunction(name: "mpvVertex")
         descriptor.fragmentFunction = library.makeFunction(name: "mpvFragment")
         descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-        pipeline = try! device.makeRenderPipelineState(descriptor: descriptor)
+        let pipelineState: MTLRenderPipelineState
+        do {
+            pipelineState = try device.makeRenderPipelineState(descriptor: descriptor)
+        } catch {
+            Self.logFailure("渲染管线状态创建失败: \(error)")
+            return nil
+        }
+        self.pipeline = pipelineState
         super.init(frame: frame)
 
         metalLayer.device = device
@@ -71,6 +91,12 @@ final class MpvMetalView: UIView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// 初始化失败的统一记录（mpv.log + 系统日志，供"UI 提示可观测"验收排查）
+    private static func logFailure(_ reason: String) {
+        MPVLog.log("MpvMetalView init failed: \(reason)")
+        logger.error("MpvMetalView init failed: \(reason, privacy: .public)")
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()

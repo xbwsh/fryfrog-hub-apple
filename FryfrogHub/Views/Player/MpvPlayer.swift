@@ -1,12 +1,14 @@
 import Foundation
 import os
 
+/// 文件级日志（Logger 为 Sendable，供 MainActor 方法与 nonisolated 事件线程共用）
+private let mpvLogger = Logger(subsystem: "com.fryfrog.hub", category: "mpv")
+
 /// libmpv 客户端封装（基于 mpv/client.h + mpv/render.h）。
 /// 负责创建/初始化实例、选项、命令、属性监听与事件循环；
 /// 渲染采用软件输出（MPV_RENDER_API_TYPE_SW），由 MpvRenderView 上传到 Metal 显示。
 @MainActor
 final class MpvPlayer {
-    private static let logger = Logger(subsystem: "com.fryfrog.hub", category: "mpv")
     /// 状态回调
     var onPosition: ((Double) -> Void)?
     var onDuration: ((Double) -> Void)?
@@ -23,7 +25,10 @@ final class MpvPlayer {
 
     private var handle: OpaquePointer?
     private var renderContext: OpaquePointer?
-    private var running = false
+    /// 跨线程停止标志：主线程 shutdown 置 false，事件线程轮询（锁保证可见性）
+    private let running = RunningFlag()
+    // T1-3 复核结论：此信号量仅用于同步"专用事件线程退出"，wait 发生在主线程同步方法
+    // shutdown() 内且有 1s 超时上限，不阻塞 Swift 协作线程池，用法合规，保留
     private let eventLoopStopped = DispatchSemaphore(value: 0)
     private(set) var videoWidth = 0
     private(set) var videoHeight = 0
@@ -32,8 +37,8 @@ final class MpvPlayer {
 
     /// 释放 mpv 实例（由持有者在主线程显式调用）
     func shutdown() {
-        let wasRunning = running
-        running = false
+        let wasRunning = running.value
+        running.value = false
         // mpv_destroy must not race with mpv_wait_event on the event thread.
         if wasRunning {
             _ = eventLoopStopped.wait(timeout: .now() + 1)
@@ -133,7 +138,7 @@ final class MpvPlayer {
             }
         }
         MPVLog.log("render context create result=\(rc)")
-        Self.logger.info("render context create result=\(rc, privacy: .public)")
+        mpvLogger.info("render context create result=\(rc, privacy: .public)")
         guard rc >= 0, let ctx else {
             onError?("创建渲染上下文失败")
             return
@@ -149,7 +154,7 @@ final class MpvPlayer {
                 player.onFrame?()
             }
         }, selfPtr)
-        Self.logger.info("render context ready (SW)")
+        mpvLogger.info("render context ready (SW)")
     }
 
     /// 软件渲染一帧到指定 BGRA 缓冲区（须与 MpvRenderView 的缓冲生命周期匹配）
@@ -195,7 +200,7 @@ final class MpvPlayer {
         }
         if result < 0 {
             MPVLog.log("render FAILED result=\(result)")
-            Self.logger.error("render failed result=\(result, privacy: .public)")
+            mpvLogger.error("render failed result=\(result, privacy: .public)")
         }
     }
 
@@ -410,30 +415,37 @@ final class MpvPlayer {
     // MARK: - 事件循环
 
     private func startEventLoop() {
-        guard let handle, !running else { return }
-        running = true
-        let eventHandle = handle
-        Thread.detachNewThread { [weak self, eventHandle] in
-            guard let self else { return }
-            defer { self.eventLoopStopped.signal() }
-            while self.running {
-                guard let event = mpv_wait_event(eventHandle, 0.02) else { continue }
+        guard let handle, !running.value else { return }
+        running.value = true
+        // OpaquePointer 非 Sendable，经 box 显式声明约束：指针仅在事件线程内解包使用，
+        // 生命周期由 shutdown() 的退出同步保证
+        let context = EventContext(eventHandle: handle, running: running)
+        // 专用线程轮询 mpv_wait_event（最长阻塞 0.02s），不可用协作线程池；
+        // 循环内不触碰 MainActor 隔离状态：标志经 RunningFlag、事件解析在 nonisolated
+        // handleEvent 内完成后统一 DispatchQueue.main 派发
+        Thread.detachNewThread { [weak self] in
+            defer { self?.eventLoopStopped.signal() }
+            while context.running.value {
+                guard let event = mpv_wait_event(context.eventHandle, 0.02) else { continue }
                 if event.pointee.event_id == MPV_EVENT_NONE { continue }
-                self.handleEvent(event)
+                self?.handleEvent(event)
             }
         }
     }
 
-    private func handleEvent(_ event: UnsafePointer<mpv_event>!) {
+    /// 运行于 mpv 事件线程：须在下一次 mpv_wait_event 前完成事件指针读取（mpv API 约束）；
+    /// 函数体仅做 C 内存读取与日志，所有 UI/状态变更均经主线程派发，故声明为 nonisolated
+    private nonisolated func handleEvent(_ event: UnsafePointer<mpv_event>!) {
         let id = event.pointee.event_id
         switch id {
         case MPV_EVENT_PROPERTY_CHANGE:
             let data = event.pointee.data.assumingMemoryBound(to: mpv_event_property.self)
             let name = String(cString: data.pointee.name)
-            let format = data.pointee.format
-            let value = data.pointee.data
+            // mpv 事件数据仅保留至下一次 mpv_wait_event，必须在事件线程内完成解引用，
+            // 跨线程只传值类型，消除主线程延迟读悬垂指针的竞态
+            let decoded = PropertyValue.decode(format: data.pointee.format, from: data.pointee.data)
             DispatchQueue.main.async { [weak self] in
-                self?.handlePropertyChange(name: name, format: format, value: value)
+                self?.handlePropertyChange(name: name, value: decoded)
             }
         case MPV_EVENT_FILE_LOADED:
             // 仅文件加载完成（track-list 就绪）时触发，START_FILE 时轨道信息尚不可用
@@ -453,7 +465,7 @@ final class MpvPlayer {
             if let textPtr = data.pointee.text {
                 let text = String(cString: textPtr)
                 MPVLog.log("msg[\(level)] \(text)")
-                Self.logger.info("mpv[\(level, privacy: .public)] \(text, privacy: .public)")
+                mpvLogger.info("mpv[\(level, privacy: .public)] \(text, privacy: .public)")
                 if level == "error" {
                     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                     // 字幕解码器缺失（如 PGS 图形字幕未编译进 ffmpeg）只影响该字幕轨，
@@ -470,23 +482,23 @@ final class MpvPlayer {
         }
     }
 
-    private func handlePropertyChange(name: String, format: mpv_format, value: UnsafeRawPointer?) {
+    private func handlePropertyChange(name: String, value: PropertyValue?) {
         guard let value else { return }
         switch name {
         case "time-pos":
-            if format == MPV_FORMAT_DOUBLE { onPosition?(value.load(as: Double.self)) }
+            if case .double(let v) = value { onPosition?(v) }
         case "duration":
-            if format == MPV_FORMAT_DOUBLE { onDuration?(value.load(as: Double.self)) }
+            if case .double(let v) = value { onDuration?(v) }
         case "pause":
-            if format == MPV_FORMAT_FLAG { onPauseChanged?(value.load(as: Int32.self) == 1) }
+            if case .flag(let paused) = value { onPauseChanged?(paused) }
         case "eof-reached":
-            if format == MPV_FORMAT_FLAG, value.load(as: Int32.self) == 1 { onEndReached?() }
+            if case .flag(true) = value { onEndReached?() }
         case "demuxer-cache-duration":
-            if format == MPV_FORMAT_DOUBLE { onCacheDuration?(value.load(as: Double.self)) }
+            if case .double(let v) = value { onCacheDuration?(v) }
         case "width":
-            if format == MPV_FORMAT_INT64 { videoWidth = Int(value.load(as: Int64.self)); notifySize() }
+            if case .int64(let v) = value { videoWidth = Int(v); notifySize() }
         case "height":
-            if format == MPV_FORMAT_INT64 { videoHeight = Int(value.load(as: Int64.self)); notifySize() }
+            if case .int64(let v) = value { videoHeight = Int(v); notifySize() }
         default:
             break
         }
@@ -505,6 +517,43 @@ struct MpvError: LocalizedError {
     let message: String
     init(_ message: String) { self.message = message }
     var errorDescription: String? { message }
+}
+
+/// 属性变更值载荷：在 mpv 事件线程内解码为 Sendable 值类型后跨线程传递，
+/// 避免主队列延迟解引用已失效的事件内存
+private enum PropertyValue: Sendable {
+    case double(Double)
+    case flag(Bool)
+    case int64(Int64)
+
+    /// 按观察属性时声明的格式解引用原始数据；未支持的格式或空指针返回 nil（与旧行为一致地跳过）
+    static func decode(format: mpv_format, from raw: UnsafeMutableRawPointer?) -> PropertyValue? {
+        guard let raw else { return nil }
+        switch format {
+        case MPV_FORMAT_DOUBLE: return .double(raw.load(as: Double.self))
+        case MPV_FORMAT_FLAG: return .flag(raw.load(as: Int32.self) == 1)
+        case MPV_FORMAT_INT64: return .int64(raw.load(as: Int64.self))
+        default: return nil
+        }
+    }
+}
+
+/// 锁保护的运行标志：主线程（shutdown 置 false）与 mpv 事件线程（轮询读取）跨线程共享
+private final class RunningFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isRunning = false
+
+    var value: Bool {
+        get { lock.withLock { isRunning } }
+        set { lock.withLock { isRunning = newValue } }
+    }
+}
+
+/// 事件线程捕获上下文：OpaquePointer 非 Sendable，经 box 显式声明约束
+/// （指针仅在事件线程解包使用；生命周期由 shutdown() 的退出同步保证）
+private struct EventContext: @unchecked Sendable {
+    let eventHandle: OpaquePointer
+    let running: RunningFlag
 }
 
 /// 字幕轨描述（仅内置轨，id 为 mpv track-list 索引）

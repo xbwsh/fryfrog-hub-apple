@@ -125,7 +125,9 @@ final class AuthImageLoader {
     private let maxPixelSize: CGFloat = 1200
     /// 并发上限（下载+解码同时最多 4 个，避免视频多时请求/解码风暴）
     private let concurrency = 4
-    private let semaphore = DispatchSemaphore(value: 4)
+    /// 下载并发闸门：actor/continuation 挂起实现，替代 DispatchSemaphore——
+    /// 后者在 Task.detached 内 wait 会阻塞协作线程池线程，有优先级反转风险
+    private let downloadGate = AsyncSemaphore(limit: 4)
 
     private init() {}
 
@@ -147,11 +149,9 @@ final class AuthImageLoader {
             return decoded
         }
 
-        // 2) 网络下载（后台限流），成功后写磁盘
+        // 2) 网络下载（限流：最多 concurrency 个同时在跑，等待许可为挂起而非阻塞），成功后写磁盘
         do {
-            let data: Data = try await Task.detached(priority: .utility) {
-                self.semaphore.wait()
-                defer { self.semaphore.signal() }
+            let data: Data = try await downloadGate.withPermit {
                 var request = URLRequest(url: url)
                 let token = await APIClient.shared.currentToken
                 if let token {
@@ -160,7 +160,7 @@ final class AuthImageLoader {
                 let (data, _) = try await URLSession.shared.data(for: request)
                 AuthImageDiskCache.write(data, urlPath: url.path)
                 return data
-            }.value
+            }
 
             let decoded: UIImage? = await Task.detached(priority: .utility) {
                 try? decodeScaled(data: data, maxPixelSize: 1200)

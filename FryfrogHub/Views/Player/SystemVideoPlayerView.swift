@@ -120,7 +120,7 @@ struct SystemVideoPlayerView: View {
             forInterval: CMTime(seconds: 1, preferredTimescale: 1),
             queue: .main
         ) { [weak player] time in
-            guard let player else { return }
+            guard player != nil else { return }
             currentPosition = time.seconds
             currentDuration = effectiveDuration
         }

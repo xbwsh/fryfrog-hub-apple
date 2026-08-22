@@ -186,27 +186,16 @@ extension ServerConnection {
         }
     }
 
-    /// 切换当前生效的连接方式（非主线程时跳回主线程，保证视图观察安全）
+    /// 切换当前生效的连接方式（统一跳回主线程变更，保证视图观察安全）
     func setActiveMode(_ mode: ServerConnectionMode) async {
-        if Thread.isMainThread {
+        await MainActor.run {
             activeMode = mode
-            if mode == .lan {
-                await MainActor.run { PrivacySettings.shared.checkAutoDisableIfNeeded() }
-            }
-        } else {
-            await MainActor.run {
-                self.activeMode = mode
-                if mode == .lan { PrivacySettings.shared.checkAutoDisableIfNeeded() }
-            }
+            if mode == .lan { PrivacySettings.shared.checkAutoDisableIfNeeded() }
         }
     }
 
     private func updateIsProbing(_ probing: Bool) async {
-        if Thread.isMainThread {
-            isProbing = probing
-        } else {
-            await MainActor.run { self.isProbing = probing }
-        }
+        await MainActor.run { isProbing = probing }
     }
 
     private func trimmedHost(_ host: String) -> String {

@@ -55,6 +55,8 @@ targets:
       properties:
         CFBundleDisplayName: Fryfrog Hub
         UILaunchScreen: {}
+        # iPad 多任务要求支持全部方向或声明全屏；本应用为媒体播放器，固定全屏
+        UIRequiresFullScreen: true
         UIBackgroundModes:
           - audio
         UISupportedInterfaceOrientations:

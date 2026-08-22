@@ -83,7 +83,7 @@ struct CalendarView: View {
         var result: [DateGroup] = []
         for item in items {
             let date = item.nextEpisodeDate ?? "待定"
-            if var last = result.last, last.date == date {
+            if let last = result.last, last.date == date {
                 result[result.count - 1].items.append(item)
             } else {
                 result.append(DateGroup(date: date, items: [item]))

@@ -19,6 +19,7 @@
 		292F3F6B138CBF3B7326E7A9 /* VideoDetailModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D24EE828934E78B5991410F /* VideoDetailModels.swift */; };
 		29B4ADB87A53B0D2CC7F356D /* MediaLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DFADA6D14F9419E4EB9499 /* MediaLibrary.swift */; };
 		2E3726EE8B1E482F7AE06962 /* MpvPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EDC9D5C24708BB3F8289130 /* MpvPlayer.swift */; };
+		2F2FA88620D94ABBE3A7B929 /* AsyncSemaphore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45155A8D769A9BA8DC488BDF /* AsyncSemaphore.swift */; };
 		3532919AB2FE4F2C05C3AB30 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 422BCEC3D9B2DB6A9096E464 /* Assets.xcassets */; };
 		375ECAFBC8DD3C4D9E3EE28E /* MusicCacheSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D18CADE8014771211A58443 /* MusicCacheSettings.swift */; };
 		392B0AC8A71BD928EC9F6750 /* HomeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D756D75D870F7ECC08B7C130 /* HomeService.swift */; };
@@ -100,6 +101,7 @@
 		4113404225F345D70004AA87 /* PrivacySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySettings.swift; sourceTree = "<group>"; };
 		422BCEC3D9B2DB6A9096E464 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		450A6E8D7DFAD5FC56131446 /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
+		45155A8D769A9BA8DC488BDF /* AsyncSemaphore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncSemaphore.swift; sourceTree = "<group>"; };
 		45C37E9DC289A7A71DEC3A06 /* Fribidi.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Fribidi.xcframework; path = Vendor/Fribidi.xcframework; sourceTree = "<group>"; };
 		477007D0543B1308DBCFDC76 /* MPVLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVLog.swift; sourceTree = "<group>"; };
 		4819A434409E709C08DFDE41 /* FryfrogHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FryfrogHubApp.swift; sourceTree = "<group>"; };
@@ -274,6 +276,14 @@
 			path = Storage;
 			sourceTree = "<group>";
 		};
+		8D9638038E6363B0DBCE7F02 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				45155A8D769A9BA8DC488BDF /* AsyncSemaphore.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
 		94C93B96DF23D80A6E757E0E /* FryfrogHub */ = {
 			isa = PBXGroup;
 			children = (
@@ -283,6 +293,7 @@
 				06947B1F5119AE92E5836B51 /* Resources */,
 				5B1E433BCD405A82CA792C20 /* Services */,
 				87571DBE2FE458D66B071C01 /* Storage */,
+				8D9638038E6363B0DBCE7F02 /* Support */,
 				B2E335A22BC3887442700261 /* Views */,
 				9EF43FABFFDC0C9964B8A34D /* FryfrogHub-Bridging-Header.h */,
 			);
@@ -506,6 +517,7 @@
 				1DCA66CD6C7475750215585D /* APIConfig.swift in Sources */,
 				C9EE763AED6D6F7A63515B24 /* APIError.swift in Sources */,
 				A80AC05FC08CF61192FA846D /* AnyEncodable.swift in Sources */,
+				2F2FA88620D94ABBE3A7B929 /* AsyncSemaphore.swift in Sources */,
 				9AD282A7BD828615F43AD3BA /* AuthModels.swift in Sources */,
 				49999FA89369686A78193928 /* AuthService.swift in Sources */,
 				8653CD980BCC03B7395C27DF /* CalendarView.swift in Sources */,

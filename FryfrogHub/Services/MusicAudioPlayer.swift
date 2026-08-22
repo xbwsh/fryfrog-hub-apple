@@ -380,7 +380,7 @@ final class MusicAudioPlayer {
     }
 
     private func configureNowPlaying(_ song: MusicSong) {
-        var info: [String: Any] = [
+        let info: [String: Any] = [
             MPMediaItemPropertyTitle: song.title,
             MPMediaItemPropertyArtist: song.artistName ?? "未知歌手",
             MPMediaItemPropertyAlbumTitle: song.albumName ?? "未知专辑",
