@@ -89,10 +89,15 @@ extension MediaLibraryService {
 
     /// 指定资源库的流水线进度（nil = 拉取失败）
     func pipelineProgress(id: Int64) async -> PipelineProgressDTO? {
-        let response: ApiResponse<PipelineProgressDTO>? = try? await client.request(
-            "/api/v1/media-libraries/\(id)/pipeline-progress"
-        )
-        return response?.data
+        do {
+            let response: ApiResponse<PipelineProgressDTO> = try await client.request(
+                "/api/v1/media-libraries/\(id)/pipeline-progress"
+            )
+            return response.data
+        } catch {
+            AppLog.networking.warning("拉取扫描进度失败 id=\(id): \(AppLog.describe(error))")
+            return nil
+        }
     }
 
     /// 浏览服务器目录（path 为空时返回磁盘根目录）
@@ -101,10 +106,15 @@ extension MediaLibraryService {
         if let path, !path.isEmpty {
             queryItems.append(URLQueryItem(name: "path", value: path))
         }
-        let response: ApiResponse<[LibraryBrowseItem]>? = try? await client.request(
-            "/api/v1/media-libraries/browse",
-            queryItems: queryItems
-        )
-        return response?.data ?? []
+        do {
+            let response: ApiResponse<[LibraryBrowseItem]> = try await client.request(
+                "/api/v1/media-libraries/browse",
+                queryItems: queryItems
+            )
+            return response.data ?? []
+        } catch {
+            AppLog.networking.warning("浏览目录失败 path=\(path ?? "/"): \(AppLog.describe(error))")
+            return []
+        }
     }
 }

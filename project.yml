@@ -138,6 +138,7 @@ targets:
       - target: FryfrogHub
     settings:
       base:
+        ALWAYS_SEARCH_USER_PATHS: NO
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_NAME: FryfrogHubTests
         PRODUCT_BUNDLE_IDENTIFIER: com.fryfrog.hub.tests

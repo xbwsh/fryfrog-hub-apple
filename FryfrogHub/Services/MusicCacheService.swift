@@ -33,14 +33,36 @@ final class MusicCacheService {
 
     init(client: any APIClientProtocol = APIClient.shared) {
         self.client = client
-        try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        do {
+            try fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        } catch {
+            AppLog.storage.error("创建音乐缓存目录失败: \(AppLog.describe(error))")
+        }
         refresh()
     }
 
+    /// T3-3：删除失败落 storage 日志（缓存清理属可容忍失败，不阻断流程）
+    private func loggedRemove(_ url: URL, context: String) {
+        do {
+            try fileManager.removeItem(at: url)
+        } catch {
+            AppLog.storage.warning("removeItem[\(context)] \(url.lastPathComponent): \(AppLog.describe(error))")
+        }
+    }
+
     private func loadMetadata() -> [String: [String: String]] {
-        guard let data = try? Data(contentsOf: metadataURL),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: String]] else { return [:] }
-        return obj
+        guard fileManager.fileExists(atPath: metadataURL.path) else { return [:] }
+        do {
+            let data = try Data(contentsOf: metadataURL)
+            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: [String: String]] else {
+                AppLog.storage.warning("音乐缓存元数据格式异常，按空处理")
+                return [:]
+            }
+            return obj
+        } catch {
+            AppLog.storage.warning("读取音乐缓存元数据失败: \(AppLog.describe(error))")
+            return [:]
+        }
     }
 
     private func saveMetadata(for song: MusicSong) {
@@ -50,16 +72,21 @@ final class MusicCacheService {
             "artist": song.artistName ?? "",
             "album": song.albumName ?? ""
         ]
-        if let data = try? JSONSerialization.data(withJSONObject: meta, options: .prettyPrinted) {
-            try? data.write(to: metadataURL)
-        }
+        writeMetadata(meta)
     }
 
     private func removeMetadata(for id: Int64) {
         var meta = loadMetadata()
         meta.removeValue(forKey: "\(id)")
-        if let data = try? JSONSerialization.data(withJSONObject: meta, options: .prettyPrinted) {
-            try? data.write(to: metadataURL)
+        writeMetadata(meta)
+    }
+
+    private func writeMetadata(_ meta: [String: [String: String]]) {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: meta, options: .prettyPrinted)
+            try data.write(to: metadataURL)
+        } catch {
+            AppLog.storage.warning("写入音乐缓存元数据失败: \(AppLog.describe(error))")
         }
     }
 
@@ -152,7 +179,7 @@ final class MusicCacheService {
         let fileName = "\(song.id).\(ext.isEmpty ? "mp3" : ext)"
         let dest = cacheDirectory.appendingPathComponent(fileName)
         if fileManager.fileExists(atPath: dest.path) {
-            try? fileManager.removeItem(at: dest)
+            loggedRemove(dest, context: "download-overwrite")
         }
         try fileManager.moveItem(at: tempURL, to: dest)
         saveMetadata(for: song)
@@ -163,20 +190,24 @@ final class MusicCacheService {
 
     func remove(song: MusicSong) {
         guard let url = cachedFileURL(for: song) else { return }
-        try? fileManager.removeItem(at: url)
+        loggedRemove(url, context: "remove-song")
         removeMetadata(for: song.id)
         refresh()
     }
 
     func remove(info: CachedSongInfo) {
-        try? fileManager.removeItem(at: info.fileURL)
+        loggedRemove(info.fileURL, context: "remove-info")
         removeMetadata(for: info.id)
         refresh()
     }
 
     func clearAll() {
-        try? fileManager.removeItem(at: cacheDirectory)
-        try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        do {
+            try fileManager.removeItem(at: cacheDirectory)
+            try fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        } catch {
+            AppLog.storage.error("清空音乐缓存失败: \(AppLog.describe(error))")
+        }
         refresh()
     }
 
@@ -202,7 +233,7 @@ final class MusicCacheService {
             if total <= maxBytes { return }
             for f in files.sorted(by: { $0.date < $1.date }) {
                 if total <= maxBytes { break }
-                try? fileManager.removeItem(at: f.url)
+                loggedRemove(f.url, context: "enforce-limit")
                 if f.url.lastPathComponent != "metadata.json" {
                     let name = f.url.deletingPathExtension().lastPathComponent
                     if let id = Int64(name) { removeMetadata(for: id) }

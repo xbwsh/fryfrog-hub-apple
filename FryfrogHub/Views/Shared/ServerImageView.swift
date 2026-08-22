@@ -146,7 +146,12 @@ final class AuthImageLoader {
         // 1) 磁盘缓存命中（未过期，磁盘 IO + 解码在后台）
         let diskResult: UIImage? = await Task.detached(priority: .utility) {
             guard let data = AuthImageDiskCache.read(urlPath: url.path) else { return nil }
-            return try? decodeScaled(data: data, maxPixelSize: 1200)
+            do {
+                return try decodeScaled(data: data, maxPixelSize: 1200)
+            } catch {
+                AppLog.image.warning("磁盘缓存解码失败 \(url.path): \(AppLog.describe(error))")
+                return nil
+            }
         }.value
         if let decoded = diskResult {
             store(decoded, for: url)
@@ -167,7 +172,12 @@ final class AuthImageLoader {
             }
 
             let decoded: UIImage? = await Task.detached(priority: .utility) {
-                try? decodeScaled(data: data, maxPixelSize: 1200)
+                do {
+                    return try decodeScaled(data: data, maxPixelSize: 1200)
+                } catch {
+                    AppLog.image.warning("网络图片解码失败 \(url.path): \(AppLog.describe(error))")
+                    return nil
+                }
             }.value
             if let decoded {
                 store(decoded, for: url)
@@ -176,9 +186,15 @@ final class AuthImageLoader {
             throw ImageLoadError.invalidData
         } catch {
             // 3) 网络失败 → 回退过期磁盘缓存，尽力显示旧图
+            AppLog.image.warning("封面下载失败 \(url.path): \(AppLog.describe(error))")
             let staleResult: UIImage? = await Task.detached(priority: .utility) {
                 guard let data = AuthImageDiskCache.readStale(urlPath: url.path) else { return nil }
-                return try? decodeScaled(data: data, maxPixelSize: 1200)
+                do {
+                    return try decodeScaled(data: data, maxPixelSize: 1200)
+                } catch {
+                    AppLog.image.warning("过期缓存解码失败 \(url.path): \(AppLog.describe(error))")
+                    return nil
+                }
             }.value
             if let stale = staleResult {
                 store(stale, for: url)
@@ -274,8 +290,12 @@ enum AuthImageDiskCache {
     static func write(_ data: Data, urlPath: String) {
         let file = fileURL(for: urlPath)
         let fm = FileManager.default
-        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? data.write(to: file)
+        do {
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: file)
+        } catch {
+            AppLog.image.warning("封面磁盘缓存写入失败 \(urlPath): \(AppLog.describe(error))")
+        }
         evictIfOverLimit()
     }
 
@@ -309,7 +329,11 @@ enum AuthImageDiskCache {
 
         for entry in entries.sorted(by: { $0.date < $1.date }) {
             guard total > maxBytes else { break }
-            try? fm.removeItem(at: entry.url)
+            do {
+                try fm.removeItem(at: entry.url)
+            } catch {
+                AppLog.image.warning("封面缓存淘汰删除失败 \(entry.url.lastPathComponent): \(AppLog.describe(error))")
+            }
             total -= entry.size
         }
     }

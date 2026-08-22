@@ -73,6 +73,7 @@
 		99AB45DF2DAA2CD64266C44B /* SeriesModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8FFB70AAC92A6C3950C8076 /* SeriesModels.swift */; };
 		9AD282A7BD828615F43AD3BA /* AuthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9C01908A3BE8404B448257 /* AuthModels.swift */; };
 		A048AA4EE02E9553C9991CAE /* Avfilter.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7960CC705AA412220DE90171 /* Avfilter.xcframework */; };
+		A64112BC6AE494083C0CF792 /* AppLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9158967D18C99009362B0 /* AppLog.swift */; };
 		A8039336471A091D2EB225DD /* Uchardet.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7702C4323DC05DD174942842 /* Uchardet.xcframework */; };
 		A80AC05FC08CF61192FA846D /* AnyEncodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC12A9A62F77559226B1ACB /* AnyEncodable.swift */; };
 		A8A9DFCD7CFB8D80A3571F5A /* MusicModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F62AD2082E59313ADAB098 /* MusicModels.swift */; };
@@ -152,6 +153,7 @@
 		4A5A33DD255EAB62AB0F7010 /* UserEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserEditView.swift; sourceTree = "<group>"; };
 		4D777DB996E7836D3C7213FB /* MusicService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicService.swift; sourceTree = "<group>"; };
 		4F5C3173CC533F8638EFD236 /* Mbedx509.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Mbedx509.xcframework; path = Vendor/Mbedx509.xcframework; sourceTree = "<group>"; };
+		4FC9158967D18C99009362B0 /* AppLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLog.swift; sourceTree = "<group>"; };
 		56F119FD735B986DD5E316A0 /* MusicArtistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicArtistView.swift; sourceTree = "<group>"; };
 		56FED9C20180C1CB1E40CA94 /* MusicArtistCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicArtistCard.swift; sourceTree = "<group>"; };
 		57E161DD4A20CF6B3B89EC75 /* ServerImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerImageView.swift; sourceTree = "<group>"; };
@@ -358,6 +360,7 @@
 		8D9638038E6363B0DBCE7F02 /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				4FC9158967D18C99009362B0 /* AppLog.swift */,
 				45155A8D769A9BA8DC488BDF /* AsyncSemaphore.swift */,
 			);
 			path = Support;
@@ -635,6 +638,7 @@
 				C9EE763AED6D6F7A63515B24 /* APIError.swift in Sources */,
 				D5BDB8DB32FEEA84D0C11D94 /* AddToPlaylistSheet.swift in Sources */,
 				A80AC05FC08CF61192FA846D /* AnyEncodable.swift in Sources */,
+				A64112BC6AE494083C0CF792 /* AppLog.swift in Sources */,
 				2F2FA88620D94ABBE3A7B929 /* AsyncSemaphore.swift in Sources */,
 				9AD282A7BD828615F43AD3BA /* AuthModels.swift in Sources */,
 				49999FA89369686A78193928 /* AuthService.swift in Sources */,
@@ -732,6 +736,7 @@
 		035347088EBA0AF3C7BBFABF /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -799,6 +804,7 @@
 		F4A7D23485240B3DF4002E17 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

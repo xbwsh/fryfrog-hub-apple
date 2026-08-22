@@ -81,21 +81,29 @@ final class VideoService {
     func updatePosition(id: Int64, position: Double, duration: Double) async {
         guard position.isFinite, position > 0 else { return }
         let body = UpdatePositionRequest(position: position, duration: duration.isFinite ? duration : 0)
-        _ = try? await client.request(
-            "/api/v1/video/\(id)/progress",
-            method: "PUT",
-            body: AnyEncodable(body)
-        ) as ApiResponse<WatchProgressDTO>?
+        do {
+            _ = try await client.request(
+                "/api/v1/video/\(id)/progress",
+                method: "PUT",
+                body: AnyEncodable(body)
+            ) as ApiResponse<WatchProgressDTO>?
+        } catch {
+            AppLog.networking.warning("上报播放位置失败 id=\(id): \(AppLog.describe(error))")
+        }
     }
 
     /// 设置已看完状态
     func setWatched(id: Int64, completed: Bool) async {
         let body = UpdateWatchedRequest(completed: completed)
-        _ = try? await client.request(
-            "/api/v1/video/\(id)/watched",
-            method: "PUT",
-            body: AnyEncodable(body)
-        ) as ApiResponse<WatchProgressDTO>?
+        do {
+            _ = try await client.request(
+                "/api/v1/video/\(id)/watched",
+                method: "PUT",
+                body: AnyEncodable(body)
+            ) as ApiResponse<WatchProgressDTO>?
+        } catch {
+            AppLog.networking.warning("设置已看完失败 id=\(id): \(AppLog.describe(error))")
+        }
     }
 
     /// 原画流播放地址（直连，不做转码）
@@ -205,12 +213,24 @@ final class VideoService {
 
     /// 查询 Logo 选项（电影）
     func fetchMovieLogoOptions(id: Int64) async -> [LogoOption] {
-        (try? await client.request("/api/v1/video/\(id)/logo-options") as ApiResponse<[LogoOption]>?)?.data ?? []
+        do {
+            let response: ApiResponse<[LogoOption]> = try await client.request("/api/v1/video/\(id)/logo-options")
+            return response.data ?? []
+        } catch {
+            AppLog.networking.warning("拉取电影 Logo 选项失败 id=\(id): \(AppLog.describe(error))")
+            return []
+        }
     }
 
     /// 查询 Logo 选项（系列）
     func fetchSeriesLogoOptions(id: Int64) async -> [LogoOption] {
-        (try? await client.request("/api/v1/video/series/\(id)/logo-options") as ApiResponse<[LogoOption]>?)?.data ?? []
+        do {
+            let response: ApiResponse<[LogoOption]> = try await client.request("/api/v1/video/series/\(id)/logo-options")
+            return response.data ?? []
+        } catch {
+            AppLog.networking.warning("拉取系列 Logo 选项失败 id=\(id): \(AppLog.describe(error))")
+            return []
+        }
     }
 
     /// 生成截帧候选列表（异步，生成后可用 /frames/{index} 预览）

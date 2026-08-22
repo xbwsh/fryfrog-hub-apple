@@ -100,7 +100,12 @@ final class AuthService {
     /// 登出
     func logout() async {
         let serverLogout = Task {
-            _ = try? await client.requestVoid("/api/v1/auth/logout", method: "POST")
+            do {
+                _ = try await client.requestVoid("/api/v1/auth/logout", method: "POST")
+            } catch {
+                // 服务端登出失败不阻断本地清理（token 已作废场景常见），仅留痕
+                AppLog.networking.warning("服务端登出失败（本地会话照常清除）: \(AppLog.describe(error))")
+            }
         }
         tokenStore.delete()
         await client.setToken(nil)
@@ -117,8 +122,13 @@ final class AuthService {
     }
 
     private func fetchMe() async -> User? {
-        let response: MeResponse? = try? await client.request("/api/v1/auth/me")
-        return response?.user
+        do {
+            let response: MeResponse = try await client.request("/api/v1/auth/me")
+            return response.user
+        } catch {
+            AppLog.networking.warning("刷新当前用户失败: \(AppLog.describe(error))")
+            return nil
+        }
     }
 
     private func isServerRejectingToken(_ error: Error) -> Bool {
@@ -314,7 +324,11 @@ final class PreferenceSync {
             PlayerSettings.shared.decodeMode = mode
         }
         if let raw = prefs["subtitlePreference"], let data = raw.data(using: .utf8) {
-            PlayerSettings.shared.subtitlePreference = try? JSONDecoder().decode(SubtitlePreference.self, from: data)
+            do {
+                PlayerSettings.shared.subtitlePreference = try JSONDecoder().decode(SubtitlePreference.self, from: data)
+            } catch {
+                AppLog.storage.warning("云端字幕偏好解码失败，保留本地值: \(AppLog.describe(error))")
+            }
         }
     }
 
@@ -327,9 +341,13 @@ final class PreferenceSync {
             await upload()
             return
         }
-        guard let prefs = try? await AuthService.shared.fetchPreferences(),
-              !prefs.isEmpty else { return }
-        apply(prefs)
+        do {
+            let prefs = try await AuthService.shared.fetchPreferences()
+            guard !prefs.isEmpty else { return }
+            apply(prefs)
+        } catch {
+            AppLog.networking.warning("拉取云端偏好失败，保留本地值: \(AppLog.describe(error))")
+        }
     }
 
     /// 上传本地全部同步键到云端；成功清除“未同步”标记
@@ -359,8 +377,13 @@ final class PreferenceSync {
         prefs["privacy.isEnabled"] = PrivacySettings.shared.isEnabled ? "true" : "false"
         prefs["playerEngine"] = PlayerSettings.shared.engine.rawValue
         prefs["decodeMode"] = PlayerSettings.shared.decodeMode.rawValue
-        if let sub = PlayerSettings.shared.subtitlePreference, let data = try? JSONEncoder().encode(sub) {
-            prefs["subtitlePreference"] = String(data: data, encoding: .utf8)
+        if let sub = PlayerSettings.shared.subtitlePreference {
+            do {
+                let data = try JSONEncoder().encode(sub)
+                prefs["subtitlePreference"] = String(data: data, encoding: .utf8)
+            } catch {
+                AppLog.storage.warning("字幕偏好编码失败，本次不上传该项: \(AppLog.describe(error))")
+            }
         }
         return prefs
     }

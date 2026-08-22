@@ -102,8 +102,14 @@ final class PlayerSettings {
     /// 用户最近一次的字幕选择（nil = 无记忆，走默认）
     var subtitlePreference: SubtitlePreference? {
         didSet {
-            if let subtitlePreference, let data = try? JSONEncoder().encode(subtitlePreference) {
-                defaults.set(data, forKey: Keys.subtitlePreference)
+            if let subtitlePreference {
+                do {
+                    let data = try JSONEncoder().encode(subtitlePreference)
+                    defaults.set(data, forKey: Keys.subtitlePreference)
+                } catch {
+                    AppLog.storage.warning("字幕偏好持久化编码失败: \(AppLog.describe(error))")
+                    defaults.removeObject(forKey: Keys.subtitlePreference)
+                }
             } else {
                 defaults.removeObject(forKey: Keys.subtitlePreference)
             }
@@ -115,7 +121,12 @@ final class PlayerSettings {
         engine = PlayerEngine(rawValue: defaults.string(forKey: Keys.engine) ?? "") ?? .mpv
         decodeMode = DecodeMode(rawValue: defaults.string(forKey: Keys.decodeMode) ?? "") ?? .auto
         if let data = defaults.data(forKey: Keys.subtitlePreference) {
-            subtitlePreference = try? JSONDecoder().decode(SubtitlePreference.self, from: data)
+            do {
+                subtitlePreference = try JSONDecoder().decode(SubtitlePreference.self, from: data)
+            } catch {
+                AppLog.storage.warning("字幕偏好本地解码失败，重置为默认: \(AppLog.describe(error))")
+                subtitlePreference = nil
+            }
         }
     }
 }
