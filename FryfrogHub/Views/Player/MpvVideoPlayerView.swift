@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import MediaPlayer
+import QuartzCore
 
 /// 视频播放器：libmpv 内核 + 自绘控件（Metal 显示），观感模仿系统播放器
 /// （点击切换控件显示/隐藏、播放中无操作自动隐藏、上下渐变压暗），退出/暂停时上报观看进度
@@ -49,6 +50,8 @@ struct MpvVideoPlayerView: View {
     // 长按 2x：按住期间进入加速，松手恢复；进入前记住原倍速用于恢复
     @State private var isTurboActive = false
     @State private var speedBeforeLongPress: Double?
+    // T4-1：上一次单击的时间戳（单调时钟），用于自判双击
+    @State private var lastTapAt: TimeInterval = 0
     @State private var hudContent: HUDContent?
     @State private var hudDismissTask: Task<Void, Never>?
     // 硬件音量键轮询兜底（私有通知 AVSystemController 在部分系统版本不触发）
@@ -119,10 +122,12 @@ struct MpvVideoPlayerView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(
-                    // 双击优先，单击兜底（SwiftUI 会因双击判定延迟单击响应）
-                    TapGesture(count: 2)
-                        .onEnded { togglePlay() }
-                        .exclusively(before: TapGesture().onEnded { toggleControls() })
+                    // T4-1：时间戳自判替代 TapGesture(count:2).exclusively 仲裁——
+                    // 单击立即执行 toggleControls（原方案被双击判定窗口阻塞 ~300ms）；
+                    // 窗口内出现第二击则改判为双击执行 togglePlay。
+                    // 副作用（可接受）：双击时第一次的控件切换已生效，与主流播放器
+                    // "双击暂停且控件可见"的行为一致。拖动/长按走 simultaneous 手势不受影响。
+                    TapGesture().onEnded { handlePlayAreaTap() }
                 )
                 .simultaneousGesture(adjustGesture)
                 .simultaneousGesture(
@@ -361,6 +366,22 @@ struct MpvVideoPlayerView: View {
             withAnimation(.easeIn(duration: 0.15)) { controlsVisible = false }
         } else {
             showControls()
+        }
+    }
+
+    /// 双击判定窗口（对齐系统双击手感 ~0.3s）
+    private static let doubleTapWindow: TimeInterval = 0.3
+
+    /// T4-1：单击/双击时间戳自判——首击立即切换控件，窗口内第二击改判为播放/暂停
+    private func handlePlayAreaTap() {
+        let now = CACurrentMediaTime()
+        if now - lastTapAt <= Self.doubleTapWindow {
+            // 第二击：按双击处理，重置计时避免三击被误判为两组双击
+            lastTapAt = 0
+            togglePlay()
+        } else {
+            lastTapAt = now
+            toggleControls()
         }
     }
 
