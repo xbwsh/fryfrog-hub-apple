@@ -31,6 +31,7 @@
 		405100335BFEDFFC5B335DF9 /* CreatePlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE3E8B60310AF1FB44C14C9D /* CreatePlaylistSheet.swift */; };
 		47DD6A5800F238D5A6A4D247 /* MpvMetalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 888CEC658DC260063F0570D6 /* MpvMetalView.swift */; };
 		49999FA89369686A78193928 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886CE710B7995FB2ADF03AC6 /* AuthService.swift */; };
+		4BC9C46E54731995AA166DB2 /* FlatSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6577668BEF1D9DEB8F341C4 /* FlatSlider.swift */; };
 		5068C15957C4A9ACEE1AB920 /* Xml2.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C0A756EDCC09B842E509E8B9 /* Xml2.xcframework */; };
 		51F2EE4F5BB946ACFCFACDD8 /* ThemeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F075F584428206D26F6FCEB0 /* ThemeSettings.swift */; };
 		53F05F155BDA808AE2314391 /* MusicArtistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56F119FD735B986DD5E316A0 /* MusicArtistView.swift */; };
@@ -47,8 +48,10 @@
 		72A15CF213DAA610D9101F0E /* MetadataEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163F9E05822B180E08353CAD /* MetadataEditView.swift */; };
 		734CF76549CF9144849A496F /* Mbedx509.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4F5C3173CC533F8638EFD236 /* Mbedx509.xcframework */; };
 		7425F1DC05FA3CBF1FB7398C /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB084BCB791F051EC6F5F80B /* RootView.swift */; };
+		749328042C78C70208B32E3F /* PlayerSupportTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2778D3DEC4A77DF7813954 /* PlayerSupportTypes.swift */; };
 		74FDDEFBC0D08F4272849068 /* TmdbSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA00D781F85A940187C187C5 /* TmdbSearchView.swift */; };
 		75A94C68CCF5BE79B46E25E4 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D83496D45B97D12A613196A /* LibraryView.swift */; };
+		771609A8465BC15060475745 /* HiddenVolumeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2924AED8D6B576C559BA949 /* HiddenVolumeView.swift */; };
 		8055F07FF8A230CAE290A3AD /* Freetype.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 69AC172E4243560538DA48FE /* Freetype.xcframework */; };
 		837AEF9FD6530ECFAFD4C1F7 /* MusicService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D777DB996E7836D3C7213FB /* MusicService.swift */; };
 		8653CD980BCC03B7395C27DF /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4C5F695091BA405C27FAB48 /* CalendarView.swift */; };
@@ -71,6 +74,7 @@
 		B138AA04A3D0BB3AF6369A25 /* Ass.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0035B7B236BF96FEB3C54A5C /* Ass.xcframework */; };
 		B1CFF50A53C6D922C07C0E25 /* PlayerSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E818D0EF554DC7D02A5C61EC /* PlayerSettings.swift */; };
 		B9DC5E16CE402F0BB9DF2BE5 /* MusicAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60B6F6704BBCAF18BC36D3D /* MusicAudioPlayer.swift */; };
+		B9EFD71E01168DC5E7F1B4F5 /* MpvMetalViewContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DDBBD322A5ACE94504118D /* MpvMetalViewContainer.swift */; };
 		C0BBFB2AB68C18F3461F5483 /* MusicCacheView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84639C515B1B9C7F43B5CA9D /* MusicCacheView.swift */; };
 		C54934E8F8DEDCDF583A96AF /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EE2CFE2A07F6C1BB958B757 /* APIClient.swift */; };
 		C56C0C5015285DC97E94BAAB /* PosterCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76B0860B69458808E6870689 /* PosterCard.swift */; };
@@ -154,10 +158,12 @@
 		9EE2CFE2A07F6C1BB958B757 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		9EF43FABFFDC0C9964B8A34D /* FryfrogHub-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "FryfrogHub-Bridging-Header.h"; sourceTree = "<group>"; };
 		9FE7AD24D6AD83A1AAE572CC /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
+		A2924AED8D6B576C559BA949 /* HiddenVolumeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiddenVolumeView.swift; sourceTree = "<group>"; };
 		A60B6F6704BBCAF18BC36D3D /* MusicAudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicAudioPlayer.swift; sourceTree = "<group>"; };
 		A6F62AD2082E59313ADAB098 /* MusicModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicModels.swift; sourceTree = "<group>"; };
 		AA81C530806CD6E9788B766B /* MusicAlbumCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicAlbumCard.swift; sourceTree = "<group>"; };
 		ABDF20B082BF1CBC7C7DEDE2 /* MusicNowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicNowPlayingView.swift; sourceTree = "<group>"; };
+		AF2778D3DEC4A77DF7813954 /* PlayerSupportTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSupportTypes.swift; sourceTree = "<group>"; };
 		B5DDC9501DC646FA2D880278 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		BA00D781F85A940187C187C5 /* TmdbSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmdbSearchView.swift; sourceTree = "<group>"; };
 		BA27442F6DD32BB1E66EC960 /* Avcodec.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Avcodec.xcframework; path = Vendor/Avcodec.xcframework; sourceTree = "<group>"; };
@@ -176,9 +182,11 @@
 		E1233E30970F229ABDB3EDB6 /* MusicMiniPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMiniPlayer.swift; sourceTree = "<group>"; };
 		E7188986F4F5A3AFCE9CB7F2 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		E818D0EF554DC7D02A5C61EC /* PlayerSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSettings.swift; sourceTree = "<group>"; };
+		E8DDBBD322A5ACE94504118D /* MpvMetalViewContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MpvMetalViewContainer.swift; sourceTree = "<group>"; };
 		E8FFB70AAC92A6C3950C8076 /* SeriesModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesModels.swift; sourceTree = "<group>"; };
 		F075F584428206D26F6FCEB0 /* ThemeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeSettings.swift; sourceTree = "<group>"; };
 		F4C5F695091BA405C27FAB48 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+		F6577668BEF1D9DEB8F341C4 /* FlatSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlatSlider.swift; sourceTree = "<group>"; };
 		FB084BCB791F051EC6F5F80B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		FE447BEA1FC54E30BCF9DF2E /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -342,10 +350,14 @@
 		A0C4A7AC3678566B236065B7 /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				F6577668BEF1D9DEB8F341C4 /* FlatSlider.swift */,
+				A2924AED8D6B576C559BA949 /* HiddenVolumeView.swift */,
 				477007D0543B1308DBCFDC76 /* MPVLog.swift */,
 				888CEC658DC260063F0570D6 /* MpvMetalView.swift */,
+				E8DDBBD322A5ACE94504118D /* MpvMetalViewContainer.swift */,
 				8EDC9D5C24708BB3F8289130 /* MpvPlayer.swift */,
 				66E2F478B629192B8B9D6E9B /* MpvVideoPlayerView.swift */,
+				AF2778D3DEC4A77DF7813954 /* PlayerSupportTypes.swift */,
 				2F36AFD0631561C254B91777 /* SystemVideoPlayerView.swift */,
 				06814EB19C8CAFBE0D8334A0 /* VideoPlayerView.swift */,
 			);
@@ -565,7 +577,9 @@
 				D211C1174E19474742A205D3 /* CoverSelectView.swift in Sources */,
 				405100335BFEDFFC5B335DF9 /* CreatePlaylistSheet.swift in Sources */,
 				980E7FA30322DD34E9163FB0 /* FavoritesView.swift in Sources */,
+				4BC9C46E54731995AA166DB2 /* FlatSlider.swift in Sources */,
 				01499635AB36761703EC5875 /* FryfrogHubApp.swift in Sources */,
+				771609A8465BC15060475745 /* HiddenVolumeView.swift in Sources */,
 				392B0AC8A71BD928EC9F6750 /* HomeService.swift in Sources */,
 				5B0CDDF937E4E6E399EABF05 /* HomeView.swift in Sources */,
 				D175F1F8FBD54BA603FDBDC4 /* LibraryDetailView.swift in Sources */,
@@ -580,6 +594,7 @@
 				C6BFBA5160AB523716D16853 /* MediaLibraryService.swift in Sources */,
 				72A15CF213DAA610D9101F0E /* MetadataEditView.swift in Sources */,
 				47DD6A5800F238D5A6A4D247 /* MpvMetalView.swift in Sources */,
+				B9EFD71E01168DC5E7F1B4F5 /* MpvMetalViewContainer.swift in Sources */,
 				2E3726EE8B1E482F7AE06962 /* MpvPlayer.swift in Sources */,
 				90A2A489E1D3AE8A22600176 /* MpvVideoPlayerView.swift in Sources */,
 				62E5F9E8E2E7D09A9B12817D /* MusicAlbumCard.swift in Sources */,
@@ -599,6 +614,7 @@
 				EE5853BAA7693FC000DD33F9 /* MusicSongRow.swift in Sources */,
 				5E7352CB3200B74F9D3108C8 /* MusicView.swift in Sources */,
 				B1CFF50A53C6D922C07C0E25 /* PlayerSettings.swift in Sources */,
+				749328042C78C70208B32E3F /* PlayerSupportTypes.swift in Sources */,
 				E8F8130FDC7941629967EB76 /* PlaylistSongRow.swift in Sources */,
 				C56C0C5015285DC97E94BAAB /* PosterCard.swift in Sources */,
 				2842853030DA2D9183CD7B09 /* PrivacyProtectedModifier.swift in Sources */,
