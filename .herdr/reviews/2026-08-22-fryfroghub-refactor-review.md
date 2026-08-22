@@ -126,3 +126,192 @@
 
 **建议跟进（非阻塞）**:
 - `MusicService` 考虑添加 `@MainActor` 隔离，统一状态变更安全性
+
+---
+
+## 七、Phase 3 轮次审查（e514b32..7a116cc，4 提交）
+
+**审查日期**: 2026-08-22  
+**审查者**: 审查者 Agent（只读）  
+**模拟器**: 1DE872C2  
+**审查范围**: T3-1 `a85e1be`、T3-2 `ef06b2c`、T3-3 `7a3b79b`、T3-6 `5ac3788`
+
+---
+
+### 7.1 T3-1：网络层协议抽象 + 构造注入（`a85e1be`）
+
+#### `APIClientProtocol` — 协议定义 (`APIClient.swift:5-27`)
+
+✅ 协议声明 7 项要求，全部 `async`：
+- `setToken(_:)` / `currentToken` — token 生命周期
+- `setUnauthorizedHandler(_:)` / `setForbiddenHandler(_:)` — 全局错误回调注入
+- `request(_:method:body:queryItems:)` — 泛型请求（含完整 4 参数签名）
+- `requestVoid(_:method:body:queryItems:)` — 无返回值请求
+
+**无默认参数泄漏**: 协议要求本身不含默认参数值，符合 Swift 协议设计约束。
+
+#### 6 重载扩展 (`APIClient.swift:31-68`)
+
+✅ 重载清单（经 `extension APIClientProtocol` 补齐，转发到完整要求）：
+
+| 重载签名 | 转发目标 | 默认值 |
+|----------|----------|--------|
+| `request(_ path:)` | `request(path, method:"GET", body:nil, queryItems:[])` | GET, nil, [] |
+| `request(_ path:, method:)` | `request(path, method, body:nil, queryItems:[])` | nil, [] |
+| `request(_ path:, queryItems:)` | `request(path, method:"GET", body:nil, queryItems:)` | GET, nil |
+| `request(_ path:, method:, body:)` | `request(path, method, body, queryItems:[])` | [] |
+| `request(_ path:, method:, queryItems:)` | `request(path, method, body:nil, queryItems:)` | nil |
+| `requestVoid(_ path:, method:)` | `requestVoid(path, method, body:nil, queryItems:[])` | nil, [] |
+
+6 重载覆盖现有调用面所有组合，无遗漏。
+
+#### `APIClient` 构造注入 (`APIClient.swift:83-92`)
+
+✅ `init(server:sessionConfiguration:)` 接受 `any ServerConnectionProtocol` + `URLSessionConfiguration`：
+- 生产: `APIClient.shared` 使用默认参数（`ServerConnection.shared` + `.default`）
+- 测试: 注入 `MockServerConnection` + 挂 `StubURLProtocol` 的 `.ephemeral` 配置
+- `server` 属性声明为 `private let`，不可外部篡改
+
+#### `ServerConnectionProtocol` (`APIConfig.swift:31-52`)
+
+✅ 协议 10 项要求 + 1 扩展默认值（`probeLAN()` 无参糖），覆盖连接模式、URL 构造、探测、切换全链路。
+
+---
+
+### 7.2 T3-2：单元测试（`ef06b2c`）
+
+#### 测试基础设施 (`TestSupport.swift`)
+
+| 组件 | 职责 | 线程安全 |
+|------|------|----------|
+| `FlagBox` | 异步回调布尔旗标 | ✅ `NSLock` 保护 |
+| `StubURLProtocol` | 按 host 路由的确定性网络桩 | ✅ `NSLock` 保护 `behaviors`/`requestedHosts` |
+| `MockServerConnection` | `ServerConnectionProtocol` 替身 | ✅ 值类型属性，无并发写 |
+
+`StubURLProtocol` 支持两种 Outcome：
+- `.success(Int, String)` — 指定状态码 + JSON 体
+- `.failure(URLError.Code)` — 模拟连接级失败
+
+未登记的 host 一律返回 `.unsupportedURL` 失败，保证确定性。
+
+#### `APIClientFallbackTests` — 边界覆盖 (`APIClientFallbackTests.swift`)
+
+| 测试用例 | 覆盖边界 | 结论 |
+|----------|----------|------|
+| `test_fallback_switchesToAlternateOnPrimaryConnectionFailure` | 主地址连接失败 → 备选成功 → 切换生效模式 | ✅ |
+| `test_fallback_throwsOriginalErrorWhenBothFail` | 双失败 → 抛原始错误、不切换 | ✅ |
+| `test_noFallbackOnBusinessError` | 500 业务错误 → 不尝试备选 | ✅ |
+| `test_noFallbackWhenAlternateNotConfigured` | 无备选地址 → 仅请求主地址 | ✅ |
+| `test_unauthorizedHandlerFiresOn401` | 业务接口 401 → 触发 handler | ✅ |
+| `test_unauthorizedHandlerSkippedForAuthPaths` | `/auth/login` 401 → 不触发登出 | ✅ |
+| `test_forbiddenHandlerFiresOn403` | 403 → forbiddenHandler 触发、unauthorizedHandler 不触发 | ✅ |
+
+#### `ServerConnectionTests` — 探测/切换分支 (`ServerConnectionTests.swift`)
+
+| 测试用例 | 覆盖边界 | 结论 |
+|----------|----------|------|
+| `test_probeLAN_returnsTrueWhenReachable` | 局域网可达 → true | ✅ |
+| `test_probeLAN_returnsFalseWhenUnreachable` | 超时 → false | ✅ |
+| `test_probeLAN_returnsFalseWithoutLANHost` | 未配置 LAN → false | ✅ |
+| `test_refreshActiveMode_prefersLANWhenProbeSucceeds` | 探测成功 → 切 LAN | ✅ |
+| `test_refreshActiveMode_fallsBackToPublicWhenProbeFails` | 探测失败 → 切公网 | ✅ |
+| `test_refreshActiveMode_forcesPublicWhenNoLANConfigured` | 无 LAN 配置 → 强制公网 | ✅ |
+| `test_effectiveMode_forcesPublicWithoutLAN` | activeMode=.lan 但无 LAN → effectiveMode=.public | ✅ |
+| `test_baseURL_nilWhenNothingConfigured` | 空配置 → baseURL nil | ✅ |
+
+**隔离验证**: `ServerConnection(defaults:)` 注入独立 UserDefaults suite，`lanProbeSession` 注入桩会话，不触碰全局单例。
+
+---
+
+### 7.3 T3-3：静默失败接入分类日志（`7a3b79b`）
+
+#### `AppLog` 分类定义 (`AppLog.swift:6-17`)
+
+✅ 三分类 Logger，subsystem 统一为 `"com.fryfrog.hub"`：
+
+| 分类 | category | 覆盖领域 |
+|------|----------|----------|
+| `AppLog.networking` | `"networking"` | API 请求、认证、偏好同步 |
+| `AppLog.image` | `"image"` | 封面下载、磁盘缓存、降采样解码 |
+| `AppLog.storage` | `"storage"` | Keychain、UserDefaults、音乐缓存 |
+
+**可过滤性**: `log stream --predicate 'subsystem == "com.fryfrog.hub"'` 可统一捕获三分类，符合要求。
+
+#### 调用面落点统计
+
+| 文件 | 调用次数 | 分类 |
+|------|----------|------|
+| `MusicCacheService.swift` | 6 | storage |
+| `PlayerSettings.swift` | 2 | storage |
+| `MediaLibraryService.swift` | 2 | networking |
+| `AuthService.swift` | 5 | networking + storage |
+| `VideoService.swift` | 4 | networking |
+| `ServerImageView.swift` | 6 | image |
+| **合计** | **25** | — |
+
+25 处 `AppLog.*` 调用覆盖网络/图片/存储三条链路，均有落点。
+
+#### `try?` 静默保留评估
+
+全项目 `try?` 分布（Top 5 文件）：
+
+| 文件 | 数量 | 静默理由 |
+|------|------|----------|
+| `ServerImageView.swift` | 8 | 图片加载失败降级为空白占位，不影响核心功能 |
+| `SystemVideoPlayerView.swift` | 6 | 系统播放器 AVPlayer 初始化/会话配置，失败时 UI 已有占位 |
+| `MpvVideoPlayerView.swift` | 6 | AVAudioSession 配置、进度上报，失败不阻塞播放 |
+| `MusicAudioPlayer.swift` | 6 | AVPlayer 会话/通知注册，失败时播放器功能降级 |
+| `MusicCacheService.swift` | 5 | 缓存读写/元数据解析，失败时按空缓存处理 |
+
+**结论**: ~55 处 `try?` 均位于非关键路径（UI 占位、缓存、日志、辅助功能），静默保留理由成立。关键路径（如 `MusicService.setStar`、`APIClient.request`）使用 `throws` 传播，未被 `try?` 吞掉。
+
+---
+
+### 7.4 T3-6：MusicService @MainActor 隔离（`5ac3788`）
+
+#### 注解位置 (`MusicService.swift:13`)
+
+✅ `@MainActor` 标注在 class 声明上方（`@Observable` 之前），语义正确：
+```swift
+@MainActor
+@Observable
+final class MusicService { ... }
+```
+
+#### 调用面隔离一致性
+
+| 调用方 | 隔离域 | 结论 |
+|--------|--------|------|
+| `MusicView` | SwiftUI View → @MainActor | ✅ |
+| `MusicNowPlayingView` | SwiftUI View → @MainActor | ✅ |
+| `MusicSongRow` | SwiftUI View → @MainActor | ✅ |
+| `MusicAlbumView` | SwiftUI View → @MainActor | ✅ |
+| `MusicArtistView` | SwiftUI View → @MainActor | ✅ |
+| `MusicPlaylistView` | SwiftUI View → @MainActor | ✅ |
+| `PlaylistSongRow` | SwiftUI View → @MainActor | ✅ |
+| `CreatePlaylistSheet` | SwiftUI View → @MainActor | ✅ |
+| `AddToPlaylistSheet` | SwiftUI View → @MainActor | ✅ |
+| `HomeView` | SwiftUI View → @MainActor | ✅ |
+| `MusicCacheService.shared` | `@MainActor` (line 14) | ✅ |
+| `MusicAudioPlayer.shared` | `@MainActor` (line 6) | ✅ |
+
+**全部 12 个调用方均处于 MainActor 隔离域**，无跨隔离调用，无数据竞态风险。
+
+#### 依赖注入确认
+
+`MusicService` 内部使用 `any APIClientProtocol` 和 `any ServerConnectionProtocol`（`MusicService.swift:18-19`），不再硬编码 `APIClient.shared`，与 T3-1 协议抽象对齐。
+
+---
+
+### 7.5 Phase 3 审查结论
+
+| 任务 | 提交 | 结论 |
+|------|------|------|
+| T3-1 网络层协议抽象 | `a85e1be` | ✅ **REVIEW_PASS** — 协议 7 项要求完整、6 重载无遗漏、构造注入正确 |
+| T3-2 单元测试 | `ef06b2c` | ✅ **REVIEW_PASS** — 15 用例覆盖双失败/无备选/401 豁免/403 不登出等边界 |
+| T3-3 分类日志 | `7a3b79b` | ✅ **REVIEW_PASS** — 3 分类 + 25 调用落点 + ~55 try? 静默理由成立 |
+| T3-6 @MainActor | `5ac3788` | ✅ **REVIEW_PASS** — 12 调用方均 MainActor 隔离，无跨隔离泄漏 |
+
+**Phase 3 轮次最终裁定: `REVIEW_PASS`**
+
+无需返工。待 Leader 打 `refactor-phase3-pass` Tag 后关闭本轮重构。
