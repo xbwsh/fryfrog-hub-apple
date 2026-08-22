@@ -85,6 +85,7 @@
 		C56C0C5015285DC97E94BAAB /* PosterCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76B0860B69458808E6870689 /* PosterCard.swift */; };
 		C6BFBA5160AB523716D16853 /* MediaLibraryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B20E2F37C35E00B4D51692A /* MediaLibraryService.swift */; };
 		C9EE763AED6D6F7A63515B24 /* APIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 450A6E8D7DFAD5FC56131446 /* APIError.swift */; };
+		CD5F2518176E435CF829522D /* EpisodeDisplayMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E8D6F86A8FDEF6A4B4ED81F /* EpisodeDisplayMode.swift */; };
 		CF8A72BE6DE94B3626F2EBEE /* Avformat.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2DC412732F3C17F76948CBAD /* Avformat.xcframework */; };
 		D175F1F8FBD54BA603FDBDC4 /* LibraryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26B4533D8EA717230F22EE48 /* LibraryDetailView.swift */; };
 		D1ED50623CE712542DFC6418 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5DDC9501DC646FA2D880278 /* LoginView.swift */; };
@@ -158,6 +159,7 @@
 		886CE710B7995FB2ADF03AC6 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		888CEC658DC260063F0570D6 /* MpvMetalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MpvMetalView.swift; sourceTree = "<group>"; };
 		8BE24D18359F7B329BD0D113 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		8E8D6F86A8FDEF6A4B4ED81F /* EpisodeDisplayMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeDisplayMode.swift; sourceTree = "<group>"; };
 		8EDC9D5C24708BB3F8289130 /* MpvPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MpvPlayer.swift; sourceTree = "<group>"; };
 		93FDF62AA4F20EF106957AA1 /* UsersManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsersManagementView.swift; sourceTree = "<group>"; };
 		9B20E2F37C35E00B4D51692A /* MediaLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryService.swift; sourceTree = "<group>"; };
@@ -301,6 +303,7 @@
 				F4C5F695091BA405C27FAB48 /* CalendarView.swift */,
 				C7B8E3C64DC720E67ACAA291 /* CarouselView.swift */,
 				369C0A1B39D4E6319D978C2D /* CoverSelectView.swift */,
+				8E8D6F86A8FDEF6A4B4ED81F /* EpisodeDisplayMode.swift */,
 				9FE7AD24D6AD83A1AAE572CC /* FavoritesView.swift */,
 				D2FE953B0FB5E28D6F6BD807 /* HomeView.swift */,
 				26B4533D8EA717230F22EE48 /* LibraryDetailView.swift */,
@@ -592,6 +595,7 @@
 				174D9EE790F22787FD614731 /* ChangePasswordView.swift in Sources */,
 				D211C1174E19474742A205D3 /* CoverSelectView.swift in Sources */,
 				405100335BFEDFFC5B335DF9 /* CreatePlaylistSheet.swift in Sources */,
+				CD5F2518176E435CF829522D /* EpisodeDisplayMode.swift in Sources */,
 				980E7FA30322DD34E9163FB0 /* FavoritesView.swift in Sources */,
 				4BC9C46E54731995AA166DB2 /* FlatSlider.swift in Sources */,
 				01499635AB36761703EC5875 /* FryfrogHubApp.swift in Sources */,
