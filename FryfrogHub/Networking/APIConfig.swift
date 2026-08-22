@@ -14,6 +14,19 @@ enum ServerConnectionMode: String {
     }
 }
 
+/// 主机地址工具（T3-5：登录校验与 URL 拼接共用，统一 IPv6 括号补齐逻辑）
+enum HostValidator {
+    /// IPv6 裸地址补方括号；已带括号或非 IPv6（无冒号）原样返回
+    static func normalized(_ host: String) -> String {
+        host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
+    }
+
+    /// 校验 `scheme://host:port` 能否构成合法 URL（IPv6 裸地址与 `[..]` 形式均接受）
+    static func isValid(host: String, port: Int, scheme: String) -> Bool {
+        URL(string: "\(scheme)://\(normalized(host)):\(port)")?.scheme != nil
+    }
+}
+
 /// 服务器连接配置（持久化到 UserDefaults，支持 IPv6 如 `http://[2409:...]:20058`）
 /// 可同时配置公网（域名）与局域网地址，两者共用协议与端口；
 /// 优先使用局域网，局域网连不通时自动切换到公网。
@@ -128,7 +141,7 @@ extension ServerConnection {
         let host = trimmedHost(mode == .lan ? lanHost : publicHost)
         guard !host.isEmpty else { return nil }
         // IPv6 地址需带方括号，用户直接粘贴裸 IPv6 时自动补齐
-        let hostWithBrackets = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
+        let hostWithBrackets = HostValidator.normalized(host)
         let portValue = port.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let portNumber = Int(portValue), (1...65535).contains(portNumber) else { return nil }
         return "\(scheme)://\(hostWithBrackets):\(portNumber)"

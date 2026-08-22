@@ -118,29 +118,28 @@ final class MusicService {
             queryItems: [URLQueryItem(name: "status", value: starred ? "true" : "false")]
         )
         // 本地同步更新 songs/groups 中对应项的 starred，避免整页 reload
+        // （T3-4：逐字段拷贝统一收敛到模型的 updating(...) 方法）
         await MainActor.run {
             switch type {
             case "songs":
-                songs = songs.map { $0.id == id ? MusicSong(id: $0.id, title: $0.title, artistName: $0.artistName, albumName: $0.albumName, artistId: $0.artistId, albumId: $0.albumId, trackNumber: $0.trackNumber, discNumber: $0.discNumber, durationSeconds: $0.durationSeconds, format: $0.format, bitRate: $0.bitRate, genre: $0.genre, year: $0.year, fileSize: $0.fileSize, streamUrl: $0.streamUrl, coverUrl: $0.coverUrl, lyricsUrl: $0.lyricsUrl, starred: starred, rating: $0.rating, playCount: $0.playCount) : $0 }
+                songs = songs.map { $0.id == id ? $0.updating(starred: starred) : $0 }
                 if let album = selectedAlbum, album.songs != nil {
-                    let updatedSongs = album.songs!.map { $0.id == id ? MusicSong(id: $0.id, title: $0.title, artistName: $0.artistName, albumName: $0.albumName, artistId: $0.artistId, albumId: $0.albumId, trackNumber: $0.trackNumber, discNumber: $0.discNumber, durationSeconds: $0.durationSeconds, format: $0.format, bitRate: $0.bitRate, genre: $0.genre, year: $0.year, fileSize: $0.fileSize, streamUrl: $0.streamUrl, coverUrl: $0.coverUrl, lyricsUrl: $0.lyricsUrl, starred: starred, rating: $0.rating, playCount: $0.playCount) : $0 }
-                    selectedAlbum = MusicAlbum(id: album.id, title: album.title, artistName: album.artistName, artistId: album.artistId, year: album.year, genre: album.genre, coverUrl: album.coverUrl, trackCount: album.trackCount, durationSeconds: album.durationSeconds, starred: album.starred, rating: album.rating, songs: updatedSongs)
+                    let updatedSongs = album.songs!.map { $0.id == id ? $0.updating(starred: starred) : $0 }
+                    selectedAlbum = album.updating(songs: updatedSongs)
                 }
             case "albums":
                 groups = groups.map { g in
-                    let albums = g.albums.map { $0.id == id ? MusicAlbum(id: $0.id, title: $0.title, artistName: $0.artistName, artistId: $0.artistId, year: $0.year, genre: $0.genre, coverUrl: $0.coverUrl, trackCount: $0.trackCount, durationSeconds: $0.durationSeconds, starred: starred, rating: $0.rating, songs: $0.songs) : $0 }
-                    return MusicLibraryGroup(libraryId: g.libraryId, libraryName: g.libraryName, libraryPath: g.libraryPath, albums: albums, artists: g.artists, albumCount: g.albumCount, artistCount: g.artistCount)
+                    g.updating(albums: g.albums.map { $0.id == id ? $0.updating(starred: starred) : $0 })
                 }
                 if let album = selectedAlbum, album.id == id {
-                    selectedAlbum = MusicAlbum(id: album.id, title: album.title, artistName: album.artistName, artistId: album.artistId, year: album.year, genre: album.genre, coverUrl: album.coverUrl, trackCount: album.trackCount, durationSeconds: album.durationSeconds, starred: starred, rating: album.rating, songs: album.songs)
+                    selectedAlbum = album.updating(starred: starred)
                 }
             case "artists":
                 groups = groups.map { g in
-                    let artists = g.artists.map { $0.id == id ? MusicArtist(id: $0.id, name: $0.name, sortName: $0.sortName, coverUrl: $0.coverUrl, albumCount: $0.albumCount, starred: starred, albums: $0.albums) : $0 }
-                    return MusicLibraryGroup(libraryId: g.libraryId, libraryName: g.libraryName, libraryPath: g.libraryPath, albums: g.albums, artists: artists, albumCount: g.albumCount, artistCount: g.artistCount)
+                    g.updating(artists: g.artists.map { $0.id == id ? $0.updating(starred: starred) : $0 })
                 }
                 if let artist = selectedArtist, artist.id == id {
-                    selectedArtist = MusicArtist(id: artist.id, name: artist.name, sortName: artist.sortName, coverUrl: artist.coverUrl, albumCount: artist.albumCount, starred: starred, albums: artist.albums)
+                    selectedArtist = artist.updating(starred: starred)
                 }
             default: break
             }

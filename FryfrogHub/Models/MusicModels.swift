@@ -29,6 +29,18 @@ struct MusicAlbum: Codable, Identifiable, Hashable {
     var coverURL: URL? { coverUrl.flatMap { ServerConnection.shared.imageURL(for: $0) } }
 }
 
+extension MusicAlbum {
+    /// 返回仅 starred 变化的副本（T3-4：模型新增字段时不再漏改调用方）
+    func updating(starred: Bool) -> MusicAlbum {
+        MusicAlbum(id: id, title: title, artistName: artistName, artistId: artistId, year: year, genre: genre, coverUrl: coverUrl, trackCount: trackCount, durationSeconds: durationSeconds, starred: starred, rating: rating, songs: songs)
+    }
+
+    /// 返回仅 songs 变化的副本
+    func updating(songs: [MusicSong]) -> MusicAlbum {
+        MusicAlbum(id: id, title: title, artistName: artistName, artistId: artistId, year: year, genre: genre, coverUrl: coverUrl, trackCount: trackCount, durationSeconds: durationSeconds, starred: starred, rating: rating, songs: songs)
+    }
+}
+
 struct MusicArtist: Codable, Identifiable, Hashable {
     let id: Int64
     let name: String
@@ -39,6 +51,13 @@ struct MusicArtist: Codable, Identifiable, Hashable {
     let albums: [MusicAlbum]?
 
     var coverURL: URL? { coverUrl.flatMap { ServerConnection.shared.imageURL(for: $0) } }
+}
+
+extension MusicArtist {
+    /// 返回仅 starred 变化的副本（T3-4）
+    func updating(starred: Bool) -> MusicArtist {
+        MusicArtist(id: id, name: name, sortName: sortName, coverUrl: coverUrl, albumCount: albumCount, starred: starred, albums: albums)
+    }
 }
 
 struct MusicSong: Codable, Identifiable, Hashable {
@@ -68,6 +87,25 @@ struct MusicSong: Codable, Identifiable, Hashable {
     var durationText: String {
         let total = max(0, Int(durationSeconds ?? 0))
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+extension MusicSong {
+    /// 返回仅 starred 变化的副本（T3-4）
+    func updating(starred: Bool) -> MusicSong {
+        MusicSong(id: id, title: title, artistName: artistName, albumName: albumName, artistId: artistId, albumId: albumId, trackNumber: trackNumber, discNumber: discNumber, durationSeconds: durationSeconds, format: format, bitRate: bitRate, genre: genre, year: year, fileSize: fileSize, streamUrl: streamUrl, coverUrl: coverUrl, lyricsUrl: lyricsUrl, starred: starred, rating: rating, playCount: playCount)
+    }
+}
+
+extension MusicLibraryGroup {
+    /// 返回仅 albums 变化的副本（T3-4）
+    func updating(albums: [MusicAlbum]) -> MusicLibraryGroup {
+        MusicLibraryGroup(libraryId: libraryId, libraryName: libraryName, libraryPath: libraryPath, albums: albums, artists: artists, albumCount: albumCount, artistCount: artistCount)
+    }
+
+    /// 返回仅 artists 变化的副本（T3-4）
+    func updating(artists: [MusicArtist]) -> MusicLibraryGroup {
+        MusicLibraryGroup(libraryId: libraryId, libraryName: libraryName, libraryPath: libraryPath, albums: albums, artists: artists, albumCount: albumCount, artistCount: artistCount)
     }
 }
 

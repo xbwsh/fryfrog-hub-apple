@@ -83,9 +83,8 @@ final class LoginViewModel {
         }
     }
 
-    /// IPv6 地址需带方括号，用户直接粘贴裸 IPv6 时自动补齐
+    /// IPv6 地址需带方括号，用户直接粘贴裸 IPv6 时自动补齐（T3-5：复用 HostValidator）
     private func isValid(host: String, port: Int) -> Bool {
-        let hostWithBrackets = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
-        return URL(string: "\(scheme)://\(hostWithBrackets):\(port)")?.scheme != nil
+        HostValidator.isValid(host: host, port: port, scheme: scheme)
     }
 }
