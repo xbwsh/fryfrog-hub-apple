@@ -18,6 +18,8 @@ final class MusicCacheService {
     private(set) var cachedSongs: [CachedSongInfo] = []
     private(set) var totalBytes: Int64 = 0
     private(set) var isLoading = false
+    /// 已缓存歌曲 id 集合：供列表行 O(1) 查询，避免每行渲染走主线程文件 IO
+    private var cachedIDs: Set<Int64> = []
 
     private let fileManager = FileManager.default
 
@@ -102,6 +104,7 @@ final class MusicCacheService {
         }
         let metadata = loadMetadata()
         var infos: [CachedSongInfo] = []
+        var ids: Set<Int64> = []
         var total: Int64 = 0
         for url in urls {
             if url.lastPathComponent == "metadata.json" { continue }
@@ -110,6 +113,7 @@ final class MusicCacheService {
                   let date = values.contentModificationDate else { continue }
             let name = url.deletingPathExtension().lastPathComponent
             guard let id = Int64(name) else { continue }
+            ids.insert(id)
             var title = metadata["\(id)"]?["title"]
             var artist = metadata["\(id)"]?["artist"]
             if title == nil || title == name {
@@ -124,6 +128,7 @@ final class MusicCacheService {
             total += Int64(size)
         }
         cachedSongs = infos.sorted { $0.modifiedDate > $1.modifiedDate }
+        cachedIDs = ids
         totalBytes = total
     }
 
@@ -149,11 +154,8 @@ final class MusicCacheService {
     }
 
     func isCached(_ song: MusicSong) -> Bool {
-        // 依赖 @Observable 的 cachedSongs，使 SwiftUI 视图在 refresh() 后自动重算
-        // 避免直接 fileExists 导致视图不观测不到变化，需手动刷新
-        if cachedSongs.contains(where: { $0.id == song.id }) { return true }
-        // 兜底：首次启动或外部文件变动时 cachedSongs 尚未同步
-        return cachedFileURL(for: song) != nil
+        // 内存集合查询（refresh() 时与磁盘同步），O(1) 且不阻塞主线程
+        cachedIDs.contains(song.id)
     }
 
     func localPlaybackURL(for song: MusicSong) -> URL? {

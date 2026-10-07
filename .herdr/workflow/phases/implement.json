@@ -1,0 +1,17 @@
+{
+  "status": "APPROVED",
+  "attempt": 2,
+  "dispatchedEventId": "2d8dee7d-c4f2-4bd3-a34d-fb9017733f99",
+  "acceptedEventId": "5d81ec59-e2e1-4dfe-97c2-b8e31256407d",
+  "report": "/Users/xiamu/Desktop/GitHub/fryfrog-hub-apple/.herdr/workflow/reports/implement-attempt-2.md",
+  "supersededAttempts": [
+    1
+  ],
+  "supersededReports": [
+    {
+      "attempt": 1,
+      "report": "/Users/xiamu/Desktop/GitHub/fryfrog-hub-apple/.herdr/workflow/reports/implement-attempt-1.md"
+    }
+  ],
+  "callbackTokenHash": "aa47f0d63602f716e8708c8f3df5da08cc208a3c4066334dc1280a291508250b"
+}

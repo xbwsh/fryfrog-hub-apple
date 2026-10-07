@@ -1,0 +1,22 @@
+default_workflow: default
+workflows:
+  default:
+    template: development
+    leader: opencode
+    implementer: claude
+    reviewer: codex
+    reviewer_read_only: true
+    use_superpowers: false
+    event_bridge_required: true
+    structured_callbacks_required: true
+    scope_checks_required: true
+    final_decision_required: true
+    max_rework: 5
+    roles:
+      implementer:
+        agent: claude
+        writable_paths:
+          - FryfrogHub/**
+          - FryfrogHubLiveActivity/**
+          - project.yml
+          - FryfrogHub.xcodeproj/**

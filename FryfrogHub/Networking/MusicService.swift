@@ -22,6 +22,9 @@ final class MusicService {
     private(set) var selectedArtist: MusicArtist?
     private(set) var songs: [MusicSong] = []
     private(set) var isLoadingSongs = false
+    private(set) var isLoadingMoreSongs = false
+    private(set) var currentSongPage = 0
+    private(set) var hasMoreSongs = true
     private(set) var isLoading = false
     var errorMessage: String?
 
@@ -81,16 +84,47 @@ final class MusicService {
         }
     }
 
-    func loadSongs(limit: Int = 200) async {
+    func loadSongs() async {
         guard songs.isEmpty else { return }
         isLoadingSongs = true
         defer { isLoadingSongs = false }
         do {
-            let response: ApiResponse<[MusicSong]> = try await client.request(
+            let response: ApiResponse<PageResponse<MusicSong>> = try await client.request(
                 "/api/v1/music/songs",
-                queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+                queryItems: [
+                    URLQueryItem(name: "page", value: "0"),
+                    URLQueryItem(name: "size", value: "50")
+                ]
             )
-            songs = response.data ?? []
+            let page = response.data
+            AppLog.networking.debug("Music songs response: \(String(describing: page))")
+            songs = page?.content ?? []
+            currentSongPage = 0
+            hasMoreSongs = (page?.content?.count ?? 0) < (page?.totalElements ?? 0)
+        } catch {
+            AppLog.networking.error("Music songs load failed: \(error)")
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadMoreSongs() async {
+        guard hasMoreSongs, !isLoadingMoreSongs else { return }
+        isLoadingMoreSongs = true
+        defer { isLoadingMoreSongs = false }
+        do {
+            let nextPage = currentSongPage + 1
+            let response: ApiResponse<PageResponse<MusicSong>> = try await client.request(
+                "/api/v1/music/songs",
+                queryItems: [
+                    URLQueryItem(name: "page", value: String(nextPage)),
+                    URLQueryItem(name: "size", value: "50")
+                ]
+            )
+            let page = response.data
+            let newSongs = page?.content ?? []
+            songs.append(contentsOf: newSongs)
+            currentSongPage = nextPage
+            hasMoreSongs = newSongs.count >= 50 && (page?.totalElements.map { songs.count < $0 } ?? false)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -98,6 +132,8 @@ final class MusicService {
 
     func reloadSongs() async {
         songs = []
+        currentSongPage = 0
+        hasMoreSongs = true
         await loadSongs()
     }
 

@@ -2,12 +2,13 @@ import SwiftUI
 import UIKit
 
 /// 主页顶部轮播图（横屏大图 + 自动轮播 + 无缝无限循环）
+/// 点击回调交给外层处理导航，避免 navigationDestination 落在 lazy 容器内
 struct CarouselView: View {
     let items: [SeriesListDTO]
+    var onSelect: (SeriesListDTO) -> Void
 
     @State private var currentIndex = 0
     @State private var timer: Task<Void, Never>?
-    @State private var selectedItem: SeriesListDTO?
 
     var body: some View {
         Group {
@@ -15,10 +16,10 @@ struct CarouselView: View {
                 InfiniteCarousel(
                     items: items,
                     currentIndex: $currentIndex,
-                    onSelect: { selectedItem = $0 }
+                    onSelect: onSelect
                 )
             } else if let first = items.first {
-                CarouselPage(item: first) { selectedItem = first }
+                CarouselPage(item: first) { onSelect(first) }
             }
         }
         .frame(height: 260)
@@ -32,11 +33,6 @@ struct CarouselView: View {
                     }
                 }
                 .padding(14)
-            }
-        }
-        .navigationDestination(item: $selectedItem) { item in
-            SeriesDetailView(series: item) { _ in
-                // 收藏变化后由首页自行刷新，这里无需额外处理
             }
         }
         .onAppear { startTimer() }

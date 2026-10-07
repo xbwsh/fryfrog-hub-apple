@@ -210,7 +210,11 @@ struct UserRow: View {
                 .disabled(isSelf)
             } label: {
                 Image(systemName: "ellipsis")
-                    .foregroundStyle(.secondary)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(Color.white.opacity(0.09), in: Circle())
+                    .contentShape(Rectangle())
             }
         }
         .opacity(user.enabled == false && !isSelf ? 0.55 : 1)

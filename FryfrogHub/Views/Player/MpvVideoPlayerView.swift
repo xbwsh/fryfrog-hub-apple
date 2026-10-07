@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import MediaPlayer
+import QuartzCore
 
 /// 视频播放器：libmpv 内核 + 自绘控件（Metal 显示），观感模仿系统播放器
 /// （点击切换控件显示/隐藏、播放中无操作自动隐藏、上下渐变压暗），退出/暂停时上报观看进度
@@ -9,6 +10,8 @@ struct MpvVideoPlayerView: View {
     var title: String = ""
     /// 后端返回的签名流地址（相对路径）；为空时回退到自行拼接的流地址
     var streamUrl: String? = nil
+    /// 封面图 URL（用于锁屏/控制中心显示）
+    var coverUrl: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -22,6 +25,8 @@ struct MpvVideoPlayerView: View {
     // 位置节流：mpv 的 time-pos 观察按视频帧率回调（~60fps），直接写 @State 会让整个
     // body 每帧重算（信息面板/进度条/金属渲染合成），滚动时帧率低；降到 ~4Hz 足够
     @State private var lastPositionEmitTime: TimeInterval = 0
+    // 锁屏/控制中心信息节流：位置 4Hz 刷新，但 MPNowPlayingInfoCenter 跨进程写入降到 1Hz
+    @State private var lastNowPlayingUpdate: TimeInterval = 0
     @State private var cacheDuration: Double = 0
     @State private var isScrubbing = false
     @State private var scrubValue: Double = 0
@@ -49,11 +54,14 @@ struct MpvVideoPlayerView: View {
     // 长按 2x：按住期间进入加速，松手恢复；进入前记住原倍速用于恢复
     @State private var isTurboActive = false
     @State private var speedBeforeLongPress: Double?
+    // T4-1：上一次单击的时间戳（单调时钟），用于自判双击
+    @State private var lastTapAt: TimeInterval = 0
     @State private var hudContent: HUDContent?
     @State private var hudDismissTask: Task<Void, Never>?
     // 硬件音量键轮询兜底（私有通知 AVSystemController 在部分系统版本不触发）
     @State private var volumePollTask: Task<Void, Never>?
     @State private var lastPolledVolume: Float = -1
+    @State private var artworkImage: UIImage?
 
     private let service = VideoService.shared
 
@@ -62,12 +70,12 @@ struct MpvVideoPlayerView: View {
             Color.black.ignoresSafeArea()
             if let player {
                 if let videoSize, videoSize.height > 0 {
-                    MpvMetalViewContainer(player: player, videoSize: $videoSize, onFailure: handleRenderFailure)
+                    MpvMetalViewContainer(player: player, videoSize: $videoSize, controlsVisible: controlsVisible, onFailure: handleRenderFailure)
                         .aspectRatio(videoSize.width / videoSize.height, contentMode: .fit)
                         .ignoresSafeArea()
                 } else {
                     // 视频尺寸未就绪前先铺满黑屏
-                    MpvMetalViewContainer(player: player, videoSize: $videoSize, onFailure: handleRenderFailure)
+                    MpvMetalViewContainer(player: player, videoSize: $videoSize, controlsVisible: controlsVisible, onFailure: handleRenderFailure)
                         .ignoresSafeArea()
                 }
             } else {
@@ -119,10 +127,12 @@ struct MpvVideoPlayerView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(
-                    // 双击优先，单击兜底（SwiftUI 会因双击判定延迟单击响应）
-                    TapGesture(count: 2)
-                        .onEnded { togglePlay() }
-                        .exclusively(before: TapGesture().onEnded { toggleControls() })
+                    // T4-1：时间戳自判替代 TapGesture(count:2).exclusively 仲裁——
+                    // 单击立即执行 toggleControls（原方案被双击判定窗口阻塞 ~300ms）；
+                    // 窗口内出现第二击则改判为双击执行 togglePlay。
+                    // 副作用（可接受）：双击时第一次的控件切换已生效，与主流播放器
+                    // "双击暂停且控件可见"的行为一致。拖动/长按走 simultaneous 手势不受影响。
+                    TapGesture().onEnded { handlePlayAreaTap() }
                 )
                 .simultaneousGesture(adjustGesture)
                 .simultaneousGesture(
@@ -364,6 +374,22 @@ struct MpvVideoPlayerView: View {
         }
     }
 
+    /// 双击判定窗口（对齐系统双击手感 ~0.3s）
+    private static let doubleTapWindow: TimeInterval = 0.3
+
+    /// T4-1：单击/双击时间戳自判——首击立即切换控件，窗口内第二击改判为播放/暂停
+    private func handlePlayAreaTap() {
+        let now = CACurrentMediaTime()
+        if now - lastTapAt <= Self.doubleTapWindow {
+            // 第二击：按双击处理，重置计时避免三击被误判为两组双击
+            lastTapAt = 0
+            togglePlay()
+        } else {
+            lastTapAt = now
+            toggleControls()
+        }
+    }
+
     private func showControls() {
         withAnimation(.easeOut(duration: 0.15)) { controlsVisible = true }
         scheduleAutoHide()
@@ -390,13 +416,14 @@ struct MpvVideoPlayerView: View {
         }
     }
 
-    /// 轮询检测硬件音量键变化（0.3s 间隔），私有通知不可靠时兜底显示胶囊
+    /// 轮询检测硬件音量键变化（1s 间隔），私有通知不可靠时兜底显示胶囊
+    /// 1s 足以覆盖按键节奏，同时避免播放期间每秒 3 次的空转唤醒
     private func startVolumePolling() {
         volumePollTask?.cancel()
         lastPolledVolume = AVAudioSession.sharedInstance().outputVolume
         volumePollTask = Task { @MainActor in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 300_000_000)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }
                 let current = AVAudioSession.sharedInstance().outputVolume
                 if abs(current - lastPolledVolume) > 0.01 {
@@ -835,12 +862,14 @@ struct MpvVideoPlayerView: View {
         .padding(.bottom, 12)
     }
 
-    /// 液态玻璃圆形背景（iOS 26+），低版本回退半透明黑圆
+    /// 液态玻璃圆形背景（iOS 26+ 液态玻璃，低版本回退毛玻璃）
     @ViewBuilder
     private func circleGlassBackground() -> some View {
-        // 顶栏按钮用纯色深底而非玻璃：按钮覆盖在实时播放的视频上，
-        // 玻璃需逐帧重采样模糊导致控件淡入/交互掉帧
-        Circle().fill(.black.opacity(0.5))
+        if #available(iOS 26.0, *) {
+            Circle().fill(.clear).glassEffect(.regular, in: .circle)
+        } else {
+            Circle().fill(.ultraThinMaterial)
+        }
     }
 
     /// 液态玻璃面板背景（iOS 26+），低版本回退深色面板
@@ -915,12 +944,21 @@ struct MpvVideoPlayerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background {
-            // 控制栏用纯色深底而非玻璃：玻璃在实时视频上逐帧重采样模糊，控件淡入/交互会掉帧
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.black.opacity(0.55))
-        }
+        .background { controlBarGlassBackground() }
         .padding(.horizontal, 12)
+    }
+
+    /// 底部控制栏液态玻璃背景
+    @ViewBuilder
+    private func controlBarGlassBackground() -> some View {
+        if #available(iOS 26.0, *) {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.clear)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
+        } else {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.ultraThinMaterial)
+        }
     }
 
     // MARK: - 字幕
@@ -1075,6 +1113,7 @@ struct MpvVideoPlayerView: View {
         guard let player else { return }
         isPlaying = player.togglePause()
         checkpointSave()
+        updateNowPlayingInfo()
     }
 
     /// 长按屏幕满 0.5s 进入 2x：记住原倍速，切到 2x，中央 HUD 持续显示直到松手
@@ -1086,6 +1125,7 @@ struct MpvVideoPlayerView: View {
         player.setSpeed(2.0)
         hudDismissTask?.cancel()
         hudContent = .speed(2.0)
+        updateNowPlayingInfo()
         // 按住期间 HUD 常显，不自动消失；松手时由 endTurboSpeed 负责消失
     }
 
@@ -1098,6 +1138,7 @@ struct MpvVideoPlayerView: View {
         isTurboActive = false
         guard let restore = speedBeforeLongPress else {
             hudContent = nil
+            updateNowPlayingInfo()
             return
         }
         speedBeforeLongPress = nil
@@ -1109,6 +1150,7 @@ struct MpvVideoPlayerView: View {
         } else {
             hudContent = nil
         }
+        updateNowPlayingInfo()
         if isPlaying {
             scheduleAutoHide()
         }
@@ -1171,9 +1213,15 @@ struct MpvVideoPlayerView: View {
             guard now - lastPositionEmitTime >= 0.25 else { return }
             lastPositionEmitTime = now
             currentPosition = position
+            // 锁屏进度由 playbackRate 自动推进，不必随每帧位置更新写入
+            if now - lastNowPlayingUpdate >= 1.0 {
+                lastNowPlayingUpdate = now
+                updateNowPlayingInfo()
+            }
         }
         newPlayer.onDuration = { duration in
             currentDuration = duration
+            updateNowPlayingInfo()
         }
         newPlayer.onCacheDuration = { buffered in
             cacheDuration = buffered
@@ -1181,6 +1229,7 @@ struct MpvVideoPlayerView: View {
         newPlayer.onPauseChanged = { paused in
             isPlaying = !paused
             if paused { checkpointSave() }
+            updateNowPlayingInfo()
         }
         newPlayer.onEndReached = {
             saveProgress()
@@ -1193,6 +1242,15 @@ struct MpvVideoPlayerView: View {
             Task { @MainActor in
                 isReady = true
                 await self.loadSubtitles()
+                if let coverUrl, let url = ServerConnection.shared.imageURL(for: coverUrl) {
+                    let image = try? await AuthImageLoader.shared.loadScaled(url: url)
+                    if let image { self.artworkImage = image }
+                    updateNowPlayingInfo()
+                }
+                // 续播：文件就绪后 seek 到记录位置（比 create 时的 start 属性更可靠）
+                if resume > 0 {
+                    newPlayer.seek(to: resume)
+                }
             }
         }
 
@@ -1218,11 +1276,12 @@ struct MpvVideoPlayerView: View {
             }
             try newPlayer.create(
                 url: playbackURL,
-                httpHeaders: headers,
-                startPosition: resume
+                httpHeaders: headers
             )
             player = newPlayer
             newPlayer.play()
+            setupRemoteCommands()
+            updateNowPlayingInfo()
             startCheckpointTimer()
         } catch {
             errorMessage = error.localizedDescription
@@ -1275,5 +1334,66 @@ struct MpvVideoPlayerView: View {
         checkpointSave()
         player?.shutdown()
         player = nil
+        clearNowPlayingInfo()
+        // 恢复音乐播放器的音频会话配置
+        restoreMusicAudioSession()
+    }
+
+    private func restoreMusicAudioSession() {
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: .mixWithOthers)
+        try? AVAudioSession.sharedInstance().setActive(true, options: [])
+    }
+
+    // MARK: - 锁屏/控制中心支持
+
+    private func setupRemoteCommands() {
+        let commands = MPRemoteCommandCenter.shared()
+        commands.playCommand.addTarget { [weak player] _ in
+            Task { @MainActor in
+                player?.play()
+            }
+            return .success
+        }
+        commands.pauseCommand.addTarget { [weak player] _ in
+            Task { @MainActor in
+                player?.pause()
+            }
+            return .success
+        }
+        commands.togglePlayPauseCommand.addTarget { [weak player] _ in
+            Task { @MainActor in
+                _ = player?.togglePause()
+            }
+            return .success
+        }
+        commands.changePlaybackRateCommand.addTarget { [weak player] event in
+            guard let player, let rateEvent = event as? MPChangePlaybackRateCommandEvent else { return .commandFailed }
+            Task { @MainActor in
+                player.setSpeed(Double(rateEvent.playbackRate))
+            }
+            return .success
+        }
+    }
+
+    private func updateNowPlayingInfo() {
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: title.isEmpty ? "视频播放" : title,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentPosition,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? playbackSpeed : 0,
+        ]
+        if currentDuration.isFinite, currentDuration > 0 {
+            info[MPMediaItemPropertyPlaybackDuration] = currentDuration
+        }
+        if let artwork = artworkImage {
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: artwork.size) { _ in artwork }
+        }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    private func clearNowPlayingInfo() {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        // 不移除远程命令目标，避免清除音乐播放器注册的命令
+        // 系统会在不同应用/场景间自动管理命令中心
     }
 }

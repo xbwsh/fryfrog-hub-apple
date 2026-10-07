@@ -133,13 +133,42 @@ struct VideoDTO: Decodable, Identifiable, Hashable {
     }
 }
 
-/// 分页响应（GET /api/v1/video/favorites 等）
-struct PageResponseVideoDTO: Decodable {
-    let content: [VideoDTO]?
+/// 分页响应（GET /api/v1/video/favorites、GET /api/v1/video/actor/{id}/works 等）
+struct PageResponse<T: Decodable>: Decodable {
+    let content: [T]?
     let page: Int?
     let size: Int?
     let totalElements: Int64?
     let totalPages: Int?
+
+    /// 兼容后端返回 Int 或 Int64 的 totalElements
+    enum CodingKeys: String, CodingKey {
+        case content, page, size, totalElements, totalPages
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        content = try container.decodeIfPresent([T].self, forKey: .content)
+        page = try container.decodeIfPresent(Int.self, forKey: .page)
+        size = try container.decodeIfPresent(Int.self, forKey: .size)
+        totalPages = try container.decodeIfPresent(Int.self, forKey: .totalPages)
+        // 兼容 Int 和 Int64
+        if let intValue = try? container.decodeIfPresent(Int.self, forKey: .totalElements) {
+            totalElements = Int64(intValue)
+        } else if let intValue = try? container.decodeIfPresent(Int64.self, forKey: .totalElements) {
+            totalElements = intValue
+        } else {
+            totalElements = nil
+        }
+    }
+
+    init(content: [T]?, page: Int?, size: Int?, totalElements: Int64?, totalPages: Int?) {
+        self.content = content
+        self.page = page
+        self.size = size
+        self.totalElements = totalElements
+        self.totalPages = totalPages
+    }
 }
 
 /// 观看进度（GET/PUT /api/v1/video/{id}/progress）
@@ -169,6 +198,41 @@ struct VideoActor: Decodable, Identifiable, Hashable {
     var avatarPath: String {
         imageUrl?.isEmpty == false ? imageUrl! : "/api/v1/video/actor/\(id)/image"
     }
+}
+
+/// 演员详情（GET /api/v1/video/actor/{id}）
+struct ActorDetailDTO: Decodable, Identifiable, Hashable {
+    let id: Int64
+    let name: String?
+    let imageUrl: String?
+    let tmdbId: Int64?
+    let biography: String?
+    let alsoKnownAs: [String]?
+    let birthday: String?
+    let deathday: String?
+    let gender: Int?
+    let genderLabel: String?
+    let placeOfBirth: String?
+    let homepage: String?
+    let imdbId: String?
+    let knownForDepartment: String?
+    let popularity: Double?
+    let castCount: Int?
+    let crewCount: Int?
+    let totalCredits: Int?
+    let knownFor: [SeriesListDTO]?
+    let credits: ActorCreditsDTO?
+
+    /// 个人信息摘要（性别 · 出生日期 · 出生地）
+    var infoText: String {
+        [genderLabel, birthday, placeOfBirth].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}
+
+/// 演员出演/幕后作品（ActorDetailDTO.credits）
+struct ActorCreditsDTO: Decodable, Hashable {
+    let cast: [SeriesListDTO]?
+    let crew: [SeriesListDTO]?
 }
 
 /// PUT /api/v1/video/{id}/progress 请求体

@@ -16,6 +16,8 @@ struct SeriesDetailView: View {
     @AppStorage("episodeDisplayMode") private var displayMode = EpisodeDisplayMode.grid
     /// 当前选中的季（按系列持久记忆）
     @State private var selectedSeasonNumber: Int?
+    /// 切季方向：向后（季号增大）从右侧进/左侧出；向前则反向
+    @State private var seasonForward = true
     /// 维护弹窗
     @State private var showingMetadataEdit = false
     @State private var showingTmdbSearch = false
@@ -52,7 +54,7 @@ struct SeriesDetailView: View {
             }
             .task { await load() }
             .fullScreenCover(item: $playingVideo) { video in
-                VideoPlayerView(videoId: video.id, title: video.displayTitle, streamUrl: video.streamUrl)
+                VideoPlayerView(videoId: video.id, title: video.displayTitle, streamUrl: video.streamUrl, coverUrl: video.coverUrl)
             }
             // 播放器关闭后刷新进度/已看完状态
             .onChange(of: playingVideo) { _, newValue in
@@ -304,15 +306,19 @@ struct SeriesDetailView: View {
                 }
             }
         }
+        // 标签超宽时整体换行，新行从最左侧开始，而不是从标签缩进处
+        .frame(maxWidth: .infinity, alignment: .leading)
         .font(.footnote)
         .foregroundStyle(.secondary)
+        .lineLimit(nil)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
     private var overviewSection: some View {
         if let overview = service.detail?.overview ?? service.movie?.overview, !overview.isEmpty {
             Text(overview)
-                .font(.subheadline)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
                 .lineSpacing(4)
         }
@@ -330,21 +336,26 @@ struct SeriesDetailView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 16) {
                         ForEach(service.actors) { actor in
-                            VStack(spacing: 6) {
-                                ServerImageView(path: actor.avatarPath)
-                                    .frame(width: 72, height: 72)
-                                    .clipShape(Circle())
-                                Text(actor.displayName)
-                                    .font(.caption.weight(.medium))
-                                    .lineLimit(1)
-                                if !actor.characterText.isEmpty {
-                                    Text(actor.characterText)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                            NavigationLink {
+                                ActorWorksView(actor: actor)
+                            } label: {
+                                VStack(spacing: 6) {
+                                    ServerImageView(path: actor.avatarPath)
+                                        .frame(width: 72, height: 72)
+                                        .clipShape(Circle())
+                                    Text(actor.displayName)
+                                        .font(.caption.weight(.medium))
                                         .lineLimit(1)
+                                    if !actor.characterText.isEmpty {
+                                        Text(actor.characterText)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
                                 }
+                                .frame(width: 88)
                             }
-                            .frame(width: 88)
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -359,7 +370,7 @@ struct SeriesDetailView: View {
         if let seasons = service.detail?.seasons, !seasons.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("分集")
+                    Text("剧集")
                         .font(.title3.bold())
                     Spacer()
                     Picker("展示方式", selection: $displayMode) {
@@ -372,49 +383,73 @@ struct SeriesDetailView: View {
                     .frame(width: 160)
                 }
 
-                // 季切换标签（单季直接显示，无需标签行）
-                if seasons.count > 1 {
-                    seasonTabRow(seasons)
-                }
+                // 季封面选择条：展示所有季的竖屏海报，点击切换选中季
+                seasonPosterStrip(seasons)
 
-                // 只展示选中季的剧集
+                // 只展示选中季的剧集（切季时横向滑入/滑出，与季封面横条方向一致）
                 if let season = selectedSeason(in: seasons) {
                     let episodes = season.episodes ?? []
                     if !episodes.isEmpty {
-                        switch displayMode {
-                        case .grid:
-                            episodeGrid(episodes)
-                        case .numbers:
-                            episodeNumberGrid(episodes)
-                        case .list:
-                            episodeList(episodes)
+                        VStack(alignment: .leading, spacing: 12) {
+                            episodeSummaryLine(season, episodes)
+                            switch displayMode {
+                            case .grid:
+                                episodeGrid(episodes)
+                            case .numbers:
+                                episodeNumberGrid(episodes)
+                            case .list:
+                                episodeList(episodes)
+                            }
                         }
+                        .id(season.seasonNumber ?? 0)
+                        .transition(seasonSlideTransition)
                     }
                 }
             }
         }
     }
 
-    /// 季切换标签行（横向滚动，自动滚动到选中季）
-    private func seasonTabRow(_ seasons: [SeasonDTO]) -> some View {
+    /// 季封面选择条（横向滚动展示所有季海报，选中季高亮，点击切换）
+    private func seasonPosterStrip(_ seasons: [SeasonDTO]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             ScrollViewReader { proxy in
-                HStack(spacing: 8) {
+                HStack(alignment: .top, spacing: 12) {
                     ForEach(seasons) { season in
                         let number = season.seasonNumber ?? 0
                         let isSelected = number == (selectedSeason(in: seasons)?.seasonNumber ?? 0)
                         Button {
                             selectSeason(season)
                         } label: {
-                            Text(season.seasonLabel)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 7)
-                                .background(
-                                    isSelected ? Color.accentColor : Color.appSurface,
-                                    in: Capsule()
-                                )
-                                .foregroundStyle(isSelected ? .white : .primary)
+                            VStack(spacing: 6) {
+                                ZStack(alignment: .topTrailing) {
+                                    ServerImageView(path: season.coverUrl ?? series.coverUrl)
+                                        .frame(width: 92, height: 138)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .strokeBorder(
+                                            isSelected ? Color.accentColor : .clear,
+                                            lineWidth: 3
+                                        )
+
+                                    if isSelected {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(Color.accentColor)
+                                            .padding(5)
+                                    }
+                                }
+
+                                Text(season.seasonLabel)
+                                    .font(.caption.weight(.medium))
+                                    .lineLimit(1)
+                                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
+
+                                Text("\(season.episodes?.count ?? 0) 集")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(width: 92)
                         }
                         .buttonStyle(.plain)
                         .id(number)
@@ -429,6 +464,24 @@ struct SeriesDetailView: View {
                 }
             }
         }
+    }
+
+    /// 选中季的集数/观看进度摘要
+    private func episodeSummaryLine(_ season: SeasonDTO, _ episodes: [VideoDTO]) -> some View {
+        let watched = episodes.filter(\.isWatched).count
+        return HStack(spacing: 4) {
+            Text(season.seasonLabel)
+            Text("·")
+                .foregroundStyle(.tertiary)
+            if watched > 0 {
+                Text("已看 \(watched) / \(episodes.count) 集")
+            } else {
+                Text("共 \(episodes.count) 集")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func scrollToSelected(in seasons: [SeasonDTO], using proxy: ScrollViewProxy) {
@@ -447,9 +500,28 @@ struct SeriesDetailView: View {
         return seasons.first
     }
 
+    /// 切季动画：随方向变化——向后进右侧/退左侧，向前进左侧/退右侧；
+    /// 叠加透明度淡入淡出，避免新旧剧集在滑动过程中完全重叠
+    private var seasonSlideTransition: AnyTransition {
+        if seasonForward {
+            return .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            )
+        } else {
+            return .asymmetric(
+                insertion: .move(edge: .leading).combined(with: .opacity),
+                removal: .move(edge: .trailing).combined(with: .opacity)
+            )
+        }
+    }
+
     private func selectSeason(_ season: SeasonDTO) {
         let number = season.seasonNumber ?? 0
-        selectedSeasonNumber = number
+        seasonForward = number > (selectedSeasonNumber ?? 0)
+        withAnimation(.easeInOut(duration: 0.25)) {
+            selectedSeasonNumber = number
+        }
         UserDefaults.standard.set(number, forKey: "selectedSeason-\(series.id)")
     }
 
@@ -693,7 +765,7 @@ struct SeriesDetailView: View {
                     Button(role: .destructive) {
                         showingUnbindConfirm = true
                     } label: {
-                        Label("解绑 TMDB", systemImage: "link.badge.minus")
+                        Label("解绑 TMDB", systemImage: "link.slash")
                     }
                 }
             }
@@ -723,7 +795,15 @@ struct SeriesDetailView: View {
 
     private func fetch() async {
         await service.load(id: series.id, isStandalone: series.isStandalone)
-        await service.loadActors(id: series.id)
+        if series.isStandalone {
+            await service.loadActors(id: series.id)
+        } else {
+            await service.loadSeriesActors(seriesId: series.id)
+            // 兼容旧后端：若系列接口为空，降级用首集ID再试
+            if service.actors.isEmpty, let firstId = service.detail?.allEpisodes.first?.id {
+                await service.loadActors(id: firstId)
+            }
+        }
     }
 
     // MARK: - 操作

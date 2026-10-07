@@ -120,8 +120,16 @@ struct MusicView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if audioPlayer.currentSong != nil {
                     MusicMiniPlayer { showPlayer = true }
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .move(edge: .bottom).combined(with: .opacity)
+                            )
+                        )
                 }
             }
+            // 迷你播放器出现/消失动画
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: audioPlayer.currentSong?.id)
         }
         .background(Color.appBackground.ignoresSafeArea())
     }

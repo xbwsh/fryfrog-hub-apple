@@ -5,6 +5,8 @@ import SwiftUI
 struct MpvMetalViewContainer: UIViewRepresentable {
     let player: MpvPlayer
     @Binding var videoSize: CGSize?
+    /// T5-1：控件可见性透传（已移除 30fps 限帧，后台渲染保障全程满帧；保留参数以兼容调用点）
+    var controlsVisible: Bool
     var onFailure: (String) -> Void
 
     func makeUIView(context: Context) -> UIView {
@@ -16,6 +18,7 @@ struct MpvMetalViewContainer: UIViewRepresentable {
             return UIView()
         }
         view.startRendering()
+        view.setControlsVisible(controlsVisible)
         view.onSizeChange = { size in
             videoSize = size
         }
@@ -26,7 +29,9 @@ struct MpvMetalViewContainer: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ view: UIView, context: Context) {}
+    func updateUIView(_ view: UIView, context: Context) {
+        (view as? MpvMetalView)?.setControlsVisible(controlsVisible)
+    }
 }
 
 #Preview {

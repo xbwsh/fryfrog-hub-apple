@@ -99,6 +99,58 @@ final class ServerConnectionTests: XCTestCase {
         XCTAssertEqual(conn.effectiveMode, .public)
     }
 
+    // MARK: - 延迟测量
+
+    func test_measureLatency_returnsNonNegativeMillisecondsWhenReachable() async throws {
+        let conn = makeConnection()
+        StubURLProtocol.setBehavior(.init(outcome: .success(200, "{}")), for: "lan.test")
+
+        let ms = await conn.measureLatency(for: .lan)
+
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(ms), 0)
+    }
+
+    func test_measureLatency_returnsNilWhenUnreachable() async {
+        let conn = makeConnection()
+        StubURLProtocol.setBehavior(.init(outcome: .failure(.timedOut)), for: "pub.test")
+
+        let ms = await conn.measureLatency(for: .public)
+
+        XCTAssertNil(ms)
+    }
+
+    func test_measureLatency_returnsNilWithoutHost() async {
+        let conn = makeConnection()
+        conn.publicHost = ""
+
+        let ms = await conn.measureLatency(for: .public)
+
+        XCTAssertNil(ms)
+    }
+
+    func test_refreshLatencies_updatesBothConfiguredModes() async {
+        let conn = makeConnection()
+        StubURLProtocol.setBehavior(.init(outcome: .success(200, "{}")), for: "lan.test")
+        StubURLProtocol.setBehavior(.init(outcome: .success(200, "{}")), for: "pub.test")
+
+        await conn.refreshLatencies()
+
+        XCTAssertNotNil(conn.latency(for: .lan))
+        XCTAssertNotNil(conn.latency(for: .public))
+        XCTAssertFalse(conn.isMeasuringLatency)
+    }
+
+    func test_refreshLatencies_unreachableModeStaysNil() async {
+        let conn = makeConnection()
+        StubURLProtocol.setBehavior(.init(outcome: .success(200, "{}")), for: "lan.test")
+        StubURLProtocol.setBehavior(.init(outcome: .failure(.cannotConnectToHost)), for: "pub.test")
+
+        await conn.refreshLatencies()
+
+        XCTAssertNotNil(conn.latency(for: .lan))
+        XCTAssertNil(conn.latency(for: .public))
+    }
+
     // MARK: - effectiveMode / baseURL
 
     func test_effectiveMode_forcesPublicWithoutLAN() {

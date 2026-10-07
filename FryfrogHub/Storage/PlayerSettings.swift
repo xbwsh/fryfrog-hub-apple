@@ -1,28 +1,6 @@
 import Foundation
 import Observation
 
-/// 播放内核：libmpv / 系统播放器（AVPlayer）
-enum PlayerEngine: String, CaseIterable, Identifiable {
-    case mpv
-    case system
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .mpv: return "mpv"
-        case .system: return "系统播放器"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .mpv: return "任意格式直通、ASS 特效字幕"
-        case .system: return "仅系统支持的格式（MP4 等）"
-        }
-    }
-}
-
 /// 视频解码方式（mpv 内核）
 enum DecodeMode: String, CaseIterable, Identifiable {
     case software
@@ -71,25 +49,17 @@ struct SubtitlePreference: Codable, Equatable {
     var filename: String?
 }
 
-/// 播放内核设置（持久化到 UserDefaults）
+/// mpv 播放器设置（持久化到 UserDefaults）
 @Observable
 final class PlayerSettings {
     static let shared = PlayerSettings()
 
     private enum Keys {
-        static let engine = "playerEngine"
         static let subtitlePreference = "subtitlePreference"
         static let decodeMode = "decodeMode"
     }
 
     private let defaults = UserDefaults.standard
-
-    var engine: PlayerEngine {
-        didSet {
-            defaults.set(engine.rawValue, forKey: Keys.engine)
-            PreferenceSync.shared.scheduleUpload()
-        }
-    }
 
     /// 视频解码方式（mpv 内核；hwdec 为每文件选项，设置后下次播放生效）
     var decodeMode: DecodeMode {
@@ -118,7 +88,6 @@ final class PlayerSettings {
     }
 
     private init() {
-        engine = PlayerEngine(rawValue: defaults.string(forKey: Keys.engine) ?? "") ?? .mpv
         decodeMode = DecodeMode(rawValue: defaults.string(forKey: Keys.decodeMode) ?? "") ?? .auto
         if let data = defaults.data(forKey: Keys.subtitlePreference) {
             do {

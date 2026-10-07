@@ -24,6 +24,7 @@ struct MediaLibrary: Codable, Identifiable, Hashable {
         switch (type ?? "").uppercased() {
         case "VIDEO": return "film.fill"
         case "MUSIC": return "music.note"
+        case "AUDIOBOOK": return "book.closed"
         case "COMIC": return "book.fill"
         case "EBOOK": return "text.book.closed.fill"
         default: return "folder.fill"
@@ -35,6 +36,7 @@ struct MediaLibrary: Codable, Identifiable, Hashable {
         switch (type ?? "").uppercased() {
         case "VIDEO": return .blue
         case "MUSIC": return .orange
+        case "AUDIOBOOK": return .brown
         case "COMIC": return .purple
         case "EBOOK": return .green
         default: return .gray
@@ -53,6 +55,7 @@ struct MediaLibrary: Codable, Identifiable, Hashable {
         switch (type ?? "").uppercased() {
         case "VIDEO": return "视频"
         case "MUSIC": return "音乐"
+        case "AUDIOBOOK": return "有声书"
         case "COMIC": return "漫画"
         case "EBOOK": return "电子书"
         default: return "媒体"
