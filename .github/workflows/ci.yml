@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # 无签名自检：保证代码在任何环境下都能编译（无需任何 Secrets）
+  verify:
+    name: 模拟器编译自检
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 编译（iOS Simulator）
+        run: |
+          xcodebuild -project FryfrogHub.xcodeproj -scheme FryfrogHub \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build

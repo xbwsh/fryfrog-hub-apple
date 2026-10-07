@@ -74,6 +74,6 @@ xcrun devicectl device install app --device <UDID> build/release/FryfrogHub.ipa
 - 需要 TestFlight / App Store / 多设备分发：需 Apple Developer Program（¥688/年）+ Distribution 证书，导出方式改为 `exportArchive -exportMethod ad-hoc|app-store`。
 - 常见报错排查见 [IPA打包指南.md](IPA打包指南.md) 第 5 节。
 
-### GitHub Actions 自动打包
+### CI 编译自检
 
-推送到 `main` 或打 `v*` tag 时，CI 会自动做模拟器编译自检 + 签名打包 IPA（Artifact 保留 14 天）。配置 `IOS_SIGNING_CERT_BASE64` / `IOS_SIGNING_CERT_PASSWORD` / `IOS_PROVISIONING_PROFILE_BASE64` 三个 Secrets 后即启用签名打包，详见 [IPA打包指南.md](IPA打包指南.md#7-github-actions-自动打包ci)。
+推送到 `main` 或打 `v*` tag 时，CI 自动执行模拟器编译自检（无需签名、无需 Secrets），仅保证代码可编译。签名的 IPA 由开发者本地打包，流程见 [IPA打包指南.md](IPA打包指南.md)。
