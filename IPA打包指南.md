@@ -149,3 +149,52 @@ xcrun devicectl device install app --device <UDID> build/release/FryfrogHub.ipa
 ---
 
 *最后更新：2026-08-14*
+---
+
+## 7. GitHub Actions 自动打包（CI）
+
+仓库内置工作流 [`.github/workflows/ipa.yml`](.github/workflows/ipa.yml)，每次推送到 `main`（或打 `v*` tag、手动触发）都会：
+
+1. **模拟器编译自检**（无需 Secrets，任何提交都校验可编译）
+2. **签名打包 IPA**（需配置 Secrets，产物以 Artifact 形式保留 14 天）
+
+### 7.1 配置三个仓库 Secrets
+
+在 [GitHub → Settings → Secrets and variables → Actions](https://github.com/xbwsh/fryfrog-hub-apple/settings/secrets/actions) 添加：
+
+| Secret | 内容 |
+|---|---|
+| `IOS_SIGNING_CERT_BASE64` | 开发证书 `.p12` 的 Base64 |
+| `IOS_SIGNING_CERT_PASSWORD` | `.p12` 导出密码 |
+| `IOS_PROVISIONING_PROFILE_BASE64` | `com.fryfrog.hub` 开发描述文件 `.mobileprovision` 的 Base64 |
+
+导出证书（本机）：
+
+```bash
+security find-identity -v -p codesigning          # 记下身份 SHA1，如 65F6...
+security export -k login.keychain -t certs -f pkcs12 \
+  -P "你的p12密码" -o /tmp/fryfrog.p12 <SHA1>
+base64 -i /tmp/fryfrog.p12 | tr -d '\n' | pbcopy   # 粘贴到 Secret
+```
+
+提取描述文件（需先按第 2 步真机构建一次生成 profile）：
+
+```bash
+ls ~/Library/MobileDevice/Provisioning\ Profiles/  # 取最新的 .mobileprovision
+base64 -i <该文件> | tr -d '\n' | pbcopy           # 粘贴到 Secret
+```
+
+命令行设置（等效）：
+
+```bash
+gh secret set IOS_SIGNING_CERT_BASE64 --repo xbwsh/fryfrog-hub-apple
+gh secret set IOS_SIGNING_CERT_PASSWORD --repo xbwsh/fryfrog-hub-apple
+gh secret set IOS_PROVISIONING_PROFILE_BASE64 --repo xbwsh/fryfrog-hub-apple
+```
+
+### 7.2 注意事项
+
+- 免费开发描述文件约 **7 天过期**，过期后 CI 签名步骤会失败：重新插手机跑一次第 2 步，把新 profile 重新上传 `IOS_PROVISIONING_PROFILE_BASE64` 即可。
+- 证书（p12）有效期一年，到期后重新导出上传。
+- 未配置 Secrets 时 CI 只跑编译自检，IPA 任务自动跳过。
+- 产物下载：Actions 运行页 → 底部 Artifacts → `FryfrogHub-IPA`。

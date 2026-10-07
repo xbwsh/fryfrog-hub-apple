@@ -1,0 +1,81 @@
+name: iOS IPA
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # 无签名自检：保证代码在任何环境下都能编译（不需要任何 Secrets）
+  verify:
+    name: 模拟器编译自检
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 编译（iOS Simulator）
+        run: |
+          xcodebuild -project FryfrogHub.xcodeproj -scheme FryfrogHub \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build
+
+  # 签名打包：需要 GitHub Secrets（见 README「GitHub Actions 打包 IPA」）
+  ipa:
+    name: 构建并签名 IPA
+    needs: verify
+    if: ${{ secrets.IOS_SIGNING_CERT_BASE64 != '' && secrets.IOS_SIGNING_CERT_PASSWORD != '' && secrets.IOS_PROVISIONING_PROFILE_BASE64 != '' }}
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 导入签名证书到独立 Keychain
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.IOS_SIGNING_CERT_BASE64 }}" | base64 --decode > /tmp/fryfrog.p12
+          KEYCHAIN_PW="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PW" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PW" build.keychain
+          security import /tmp/fryfrog.p12 -P "${{ secrets.IOS_SIGNING_CERT_PASSWORD }}" \
+            -A -t cert -f pkcs12 -k build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" build.keychain
+          security list-keychains -d user -s build.keychain
+          rm -f /tmp/fryfrog.p12
+
+      - name: 安装描述文件
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode \
+            > "$HOME/Library/MobileDevice/Provisioning Profiles/FryfrogHub_dev.mobileprovision"
+
+      - name: 归档（Archive）
+        run: |
+          rm -rf build/release
+          xcodebuild -project FryfrogHub.xcodeproj -scheme FryfrogHub \
+            -configuration Release \
+            -archivePath build/release/FryfrogHub.xcarchive \
+            -allowProvisioningUpdates archive
+
+      - name: 手工打包 IPA（Payload 方式，与本地指南一致）
+        run: |
+          set -euo pipefail
+          mkdir -p build/release/ipa/Payload
+          cp -R build/release/FryfrogHub.xcarchive/Products/Applications/FryfrogHub.app \
+            build/release/ipa/Payload/
+          codesign --verify --deep --strict build/release/ipa/Payload/FryfrogHub.app
+          cd build/release/ipa && zip -qry - . > ../FryfrogHub.ipa
+          ls -lh ../FryfrogHub.ipa
+
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: FryfrogHub-IPA
+          path: build/release/FryfrogHub.ipa
+          if-no-files-found: error
+          retention-days: 14
