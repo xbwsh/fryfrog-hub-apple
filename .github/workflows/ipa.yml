@@ -14,7 +14,7 @@ jobs:
   # 无签名自检：保证代码在任何环境下都能编译（不需要任何 Secrets）
   verify:
     name: 模拟器编译自检
-    runs-on: macos-15
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +28,7 @@ jobs:
   ipa:
     name: 构建并签名 IPA
     needs: verify
-    runs-on: macos-15
+    runs-on: macos-latest
     env:
       HAS_CERT: ${{ secrets.IOS_SIGNING_CERT_BASE64 != '' }}
       HAS_CERT_PWD: ${{ secrets.IOS_SIGNING_CERT_PASSWORD != '' }}
