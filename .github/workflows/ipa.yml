@@ -24,16 +24,30 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO build
 
-  # 签名打包：需要 GitHub Secrets（见 README「GitHub Actions 打包 IPA」）
+  # 签名打包：依赖 GitHub Secrets，未配置时自动跳过签名步骤
   ipa:
     name: 构建并签名 IPA
     needs: verify
-    if: ${{ secrets.IOS_SIGNING_CERT_BASE64 != '' && secrets.IOS_SIGNING_CERT_PASSWORD != '' && secrets.IOS_PROVISIONING_PROFILE_BASE64 != '' }}
     runs-on: macos-15
+    env:
+      HAS_CERT: ${{ secrets.IOS_SIGNING_CERT_BASE64 != '' }}
+      HAS_CERT_PWD: ${{ secrets.IOS_SIGNING_CERT_PASSWORD != '' }}
+      HAS_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: 检查签名配置是否就绪
+        id: check
+        run: |
+          if [[ "$HAS_CERT" == "true" && "$HAS_CERT_PWD" == "true" && "$HAS_PROFILE" == "true" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::未配置签名 Secrets，跳过 IPA 签名打包（仅跑编译自检）。"
+          fi
+
       - name: 导入签名证书到独立 Keychain
+        if: steps.check.outputs.configured == 'true'
         run: |
           set -euo pipefail
           echo "${{ secrets.IOS_SIGNING_CERT_BASE64 }}" | base64 --decode > /tmp/fryfrog.p12
@@ -48,6 +62,7 @@ jobs:
           rm -f /tmp/fryfrog.p12
 
       - name: 安装描述文件
+        if: steps.check.outputs.configured == 'true'
         run: |
           set -euo pipefail
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
@@ -55,6 +70,7 @@ jobs:
             > "$HOME/Library/MobileDevice/Provisioning Profiles/FryfrogHub_dev.mobileprovision"
 
       - name: 归档（Archive）
+        if: steps.check.outputs.configured == 'true'
         run: |
           rm -rf build/release
           xcodebuild -project FryfrogHub.xcodeproj -scheme FryfrogHub \
@@ -63,6 +79,7 @@ jobs:
             -allowProvisioningUpdates archive
 
       - name: 手工打包 IPA（Payload 方式，与本地指南一致）
+        if: steps.check.outputs.configured == 'true'
         run: |
           set -euo pipefail
           mkdir -p build/release/ipa/Payload
@@ -73,6 +90,7 @@ jobs:
           ls -lh ../FryfrogHub.ipa
 
       - name: 上传 IPA 产物
+        if: steps.check.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: FryfrogHub-IPA
