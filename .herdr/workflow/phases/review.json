@@ -1,0 +1,10 @@
+{
+  "status": "APPROVED",
+  "attempt": 1,
+  "dispatchedEventId": "28fe87a6-0ca1-47fd-bd97-7fa3d838f76b",
+  "acceptedEventId": "12530113-2b2c-4284-862a-9ffd4a75ef40",
+  "report": "/Users/xiamu/Desktop/GitHub/fryfrog-hub-apple/.herdr/workflow/reports/review-attempt-1.md",
+  "supersededAttempts": [],
+  "supersededReports": [],
+  "callbackTokenHash": "9ed48d28c905fc13a1d401da5fb853857d6932ce326828e776034e623db904a6"
+}

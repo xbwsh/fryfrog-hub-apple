@@ -6,16 +6,13 @@ struct MusicCacheView: View {
     @State private var showClearConfirm = false
 
     var body: some View {
-        ZStack {
-            Color.appBackground.ignoresSafeArea()
-            List {
+        List {
             Section {
-                Picker("最大缓存", selection: $settings.maxBytes) {
-                    ForEach(MusicCacheSizeOption.allCases) { option in
-                        Text(option.title).tag(option.bytes)
-                    }
+                NavigationLink {
+                    MusicCacheLimitView()
+                } label: {
+                    LabeledContent("最大缓存", value: settings.formattedMax())
                 }
-                .pickerStyle(.navigationLink)
                 Text("达到上限后会自动清理最旧的缓存")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -72,7 +69,7 @@ struct MusicCacheView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        }
+        .background(Color.appBackground)
         .navigationTitle("歌曲缓存")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { cacheService.refresh() }
@@ -82,6 +79,41 @@ struct MusicCacheView: View {
         } message: {
             Text("将删除所有已缓存的歌曲文件")
         }
+    }
+}
+
+/// 最大缓存容量选择页（替代系统 navigationLink Picker——
+/// 系统页面深色下为纯黑背景+灰卡片，与 app 内柔和黑灰风格不一致）
+struct MusicCacheLimitView: View {
+    @Bindable private var settings = MusicCacheSettings.shared
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(MusicCacheSizeOption.allCases) { option in
+                    Button {
+                        settings.selectedOption = option
+                    } label: {
+                        HStack {
+                            Text(option.title)
+                            Spacer()
+                            if settings.selectedOption == option {
+                                Image(systemName: "checkmark")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                }
+            } footer: {
+                Text("达到上限后会自动清理最旧的缓存")
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color.appBackground)
+        .navigationTitle("最大缓存")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

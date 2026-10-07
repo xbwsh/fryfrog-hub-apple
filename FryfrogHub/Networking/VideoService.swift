@@ -67,6 +67,51 @@ final class VideoService {
         }
     }
 
+    /// 拉取系列演员列表（电视剧，GET /api/v1/video/series/{id}/actors，去重）
+    func loadSeriesActors(seriesId: Int64) async {
+        do {
+            let response: ApiResponse<[VideoActor]> = try await client.request("/api/v1/video/series/\(seriesId)/actors")
+            actors = response.data ?? []
+        } catch {
+            actors = []
+        }
+    }
+
+    /// 拉取演员详情（GET /api/v1/video/actor/{actorId}）
+    /// 数据来自落库缓存：首次访问可能需等待 TMDB 拉取（几秒内），之后 7 天内秒回。
+    /// 演员不存在或所在媒体库不可见 → 404（抛 APIError.httpError）。
+    func fetchActorDetail(actorId: Int64) async throws -> ActorDetailDTO {
+        let response: ApiResponse<ActorDetailDTO> = try await client.request("/api/v1/video/actor/\(actorId)")
+        guard let data = response.data else {
+            throw APIError.httpError(statusCode: 404, message: "演员不存在")
+        }
+        return data
+    }
+
+    /// 强制刷新演员详情缓存（管理员，GET /api/v1/video/actor/{actorId}/refresh）
+    func refreshActor(actorId: Int64) async throws {
+        let _: ApiResponseNoContent = try await client.request(
+            "/api/v1/video/actor/\(actorId)/refresh",
+            method: "POST"
+        )
+    }
+
+    /// 拉取演员作品列表（GET /api/v1/video/actor/{actorId}/works，按系列聚合分页）
+    /// 返回 PageResponse<SeriesListDTO>：同一剧集所有命中的集折叠为一部（type="series"，id 为系列 ID，
+    /// 封面为系列封面），独立视频/电影各自为一部（type="standalone"，id 为视频 ID），按年份降序。
+    /// 演员存在但无作品 → 200 空 content；演员不存在 → 404（抛 APIError.httpError）。
+    /// 注意前端以 HTTP 状态码区分，不能只看 success。
+    func fetchActorWorks(actorId: Int64, page: Int = 0, size: Int = 20) async throws -> PageResponse<SeriesListDTO> {
+        let response: ApiResponse<PageResponse<SeriesListDTO>> = try await client.request(
+            "/api/v1/video/actor/\(actorId)/works",
+            queryItems: [
+                URLQueryItem(name: "page", value: String(page)),
+                URLQueryItem(name: "size", value: String(size))
+            ]
+        )
+        return response.data ?? PageResponse(content: [], page: page, size: size, totalElements: 0, totalPages: 0)
+    }
+
     /// 获取观看进度（用于续播）
     func fetchProgress(id: Int64) async -> WatchProgressDTO? {
         do {

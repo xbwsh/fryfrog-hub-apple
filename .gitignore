@@ -20,3 +20,6 @@ Package.resolved
 
 # 诊断输出（Diag 写入 Documents，不会出现在仓库，防御性忽略）
 diag.txt
+
+# Claude 本机配置
+.claude/settings.local.json

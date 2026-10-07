@@ -119,8 +119,10 @@ final class AuthImageLoader {
     /// 缓存世代号：手动刷新/purge 时 +1，已渲染的图片视图据此重启加载
     private(set) var cacheGeneration = 0
 
-    /// 缓存上限（120 张 ≈ 峰值 400MB 以内，首页实际同时可见通常远低于此）
+    /// 缓存条目上限（兜底；实际主要由字节上限控制）
     private let maxCacheEntries = 120
+    /// 内存缓存字节上限（解码后约 150MB，避免 1200px 大图堆到数百 MB 触发 Jetsam）
+    private let maxCacheBytes = 150 * 1024 * 1024
     /// 降采样目标（最大边像素）：PosterCard 360pt 与轮播大图（~1206px @3x）均清晰
     private let maxPixelSize: CGFloat = 1200
     /// 并发上限（下载+解码同时最多 4 个，避免视频多时请求/解码风暴）
@@ -133,6 +135,16 @@ final class AuthImageLoader {
 
     init(client: any APIClientProtocol = APIClient.shared) {
         self.client = client
+        // 内存警告时清空解码缓存（保留磁盘缓存），避免被系统 Jetsam 回收进程
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.purgeMemoryCache()
+            }
+        }
     }
 
     func cached(url: URL) -> UIImage? {
@@ -166,7 +178,11 @@ final class AuthImageLoader {
                 if let token {
                     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
                 }
-                let (data, _) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                    let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                    throw ImageLoadError.httpError(code: code)
+                }
                 AuthImageDiskCache.write(data, urlPath: url.path)
                 return data
             }
@@ -208,8 +224,9 @@ final class AuthImageLoader {
     /// 让刚刷新的封面立即生效（内存按资源路径为键，局域网/公网/签名变化共用同一份）
     func purge(path: String?) {
         guard let path, !path.isEmpty else { return }
-        if store.cache.removeValue(forKey: path) != nil {
+        if let removed = store.cache.removeValue(forKey: path) {
             store.cacheOrder.removeAll { $0 == path }
+            store.cacheBytes = max(0, store.cacheBytes - Self.imageBytes(removed))
         }
         cacheGeneration += 1
         Task.detached(priority: .utility) {
@@ -219,25 +236,46 @@ final class AuthImageLoader {
 
     /// 清空全部图片缓存（内存 + 磁盘），手动刷新/排查封面更新时使用
     func purgeAll() {
-        store.cache.removeAll()
-        store.cacheOrder.removeAll()
+        purgeMemoryCache()
         cacheGeneration += 1
         Task.detached(priority: .utility) {
             AuthImageDiskCache.purgeAll()
         }
     }
 
+    /// 仅清空内存解码缓存（磁盘缓存保留，下次访问可快速回读）
+    func purgeMemoryCache() {
+        store.cache.removeAll()
+        store.cacheOrder.removeAll()
+        store.cacheBytes = 0
+    }
+
     private func store(_ image: UIImage, for url: URL) {
         let key = url.path
+        // 覆盖旧条目时先归还旧字节占用
+        if let old = store.cache[key] {
+            store.cacheBytes = max(0, store.cacheBytes - Self.imageBytes(old))
+            store.cacheOrder.removeAll { $0 == key }
+        }
         store.cache[key] = image
         store.cacheOrder.append(key)
-        if store.cacheOrder.count > maxCacheEntries {
-            let overflow = store.cacheOrder.count - maxCacheEntries
-            for i in 0..<overflow {
-                store.cache.removeValue(forKey: store.cacheOrder[i])
+        store.cacheBytes += Self.imageBytes(image)
+        // 条目数或字节数超限时按最旧淘汰（字节为主，条目数为兜底）
+        while store.cacheBytes > maxCacheBytes || store.cacheOrder.count > maxCacheEntries {
+            guard let oldest = store.cacheOrder.first else { break }
+            store.cacheOrder.removeFirst()
+            if let removed = store.cache.removeValue(forKey: oldest) {
+                store.cacheBytes = max(0, store.cacheBytes - Self.imageBytes(removed))
             }
-            store.cacheOrder.removeFirst(overflow)
         }
+    }
+
+    /// 解码后位图字节数（RGBA 4 字节/像素）
+    private static func imageBytes(_ image: UIImage) -> Int {
+        guard let cg = image.cgImage else {
+            return Int(image.size.width * image.size.height * 4)
+        }
+        return cg.height * cg.bytesPerRow
     }
 }
 
@@ -247,6 +285,8 @@ final class AuthImageLoader {
 private final class ImageStore {
     var cache: [String: UIImage] = [:]
     var cacheOrder: [String] = []
+    /// 当前缓存解码位图总字节数（用于字节上限淘汰）
+    var cacheBytes = 0
 }
 
 /// 封面等图片的磁盘缓存（原始字节，按服务器资源路径为键）
@@ -256,6 +296,9 @@ enum AuthImageDiskCache {
     static let ttl: TimeInterval = 7 * 24 * 60 * 60
     /// 容量上限（约 200MB，远高于实际封面体积）
     static let maxBytes: Int64 = 200 * 1024 * 1024
+
+    /// 已跟踪的缓存总字节数（进程内记账，避免每次写入都全目录枚举；失效时置 nil 触发重扫）
+    private static var trackedBytes: Int64?
 
     private static let directoryName = "FryfrogImages"
 
@@ -293,6 +336,8 @@ enum AuthImageDiskCache {
         do {
             try fm.createDirectory(at: directory, withIntermediateDirectories: true)
             try data.write(to: file)
+            // 增量记账：多数写入路径不用扫描目录；首次（此前版本遗留文件）先扫一次做基线
+            trackedBytes = max(0, (trackedBytes ?? totalBytesOnDisk()) + Int64(data.count))
         } catch {
             AppLog.image.warning("封面磁盘缓存写入失败 \(urlPath): \(AppLog.describe(error))")
         }
@@ -302,15 +347,36 @@ enum AuthImageDiskCache {
     /// 清除指定资源路径的缓存
     static func purge(urlPath: String) {
         try? FileManager.default.removeItem(at: fileURL(for: urlPath))
+        trackedBytes = nil
     }
 
     /// 清空全部图片缓存
     static func purgeAll() {
         try? FileManager.default.removeItem(at: directory)
+        trackedBytes = nil
+    }
+
+    /// 全量扫描目录统计字节数（仅在首次写或记账失效时执行）
+    private static func totalBytesOnDisk() -> Int64 {
+        let fm = FileManager.default
+        guard let urls = try? fm.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: []
+        ) else { return 0 }
+        var total: Int64 = 0
+        for url in urls {
+            if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                total += Int64(size)
+            }
+        }
+        return total
     }
 
     /// 超容量时按修改时间旧到新删除
     private static func evictIfOverLimit() {
+        // 未达上限时直接返回，避免每次写入都枚举整个目录（大多数写入路径）
+        guard let tracked = trackedBytes, tracked > maxBytes else { return }
         let fm = FileManager.default
         guard let urls = try? fm.contentsOfDirectory(
             at: directory,
@@ -336,6 +402,7 @@ enum AuthImageDiskCache {
             }
             total -= entry.size
         }
+        trackedBytes = total
     }
 }
 
@@ -359,4 +426,5 @@ private func decodeScaled(data: Data, maxPixelSize: CGFloat) throws -> UIImage {
 
 private enum ImageLoadError: Error {
     case invalidData
+    case httpError(code: Int)
 }

@@ -59,8 +59,8 @@ final class AuthService {
         guard let token = tokenStore.read() else { return }
         await client.setToken(token)
         do {
-            let response: MeResponse = try await client.request("/api/v1/auth/me")
-            currentUser = response.user
+            let response: ApiResponse<User> = try await client.request("/api/v1/auth/me")
+            currentUser = response.data
             isAuthenticated = true
             // 已登录则同步云端偏好（失败静默，保留本地缓存）
             await PreferenceSync.shared.fetch()
@@ -85,12 +85,16 @@ final class AuthService {
         guard response.success else {
             throw APIError.httpError(statusCode: 401, message: response.message)
         }
-        guard let token = response.token, !token.isEmpty else {
+        guard let data = response.data else {
+            throw APIError.unauthorized
+        }
+        let token = data.token
+        guard !token.isEmpty else {
             throw APIError.unauthorized
         }
         tokenStore.save(token)
         await client.setToken(token)
-        currentUser = response.user
+        currentUser = data.user
         defaults.set(username, forKey: Keys.lastUsername)
         isAuthenticated = true
         // 登录成功拉取该账号云端偏好（失败静默，保留本地）
@@ -123,8 +127,8 @@ final class AuthService {
 
     private func fetchMe() async -> User? {
         do {
-            let response: MeResponse = try await client.request("/api/v1/auth/me")
-            return response.user
+            let response: ApiResponse<User> = try await client.request("/api/v1/auth/me")
+            return response.data
         } catch {
             AppLog.networking.warning("刷新当前用户失败: \(AppLog.describe(error))")
             return nil
@@ -243,7 +247,6 @@ final class PreferenceSync {
     static let syncedKeys = [
         "theme.mode",
         "privacy.isEnabled",
-        "playerEngine",
         "decodeMode",
         "subtitlePreference",
     ]
@@ -317,9 +320,6 @@ final class PreferenceSync {
         if let raw = prefs["privacy.isEnabled"] {
             PrivacySettings.shared.isEnabled = raw == "true"
         }
-        if let raw = prefs["playerEngine"], let engine = PlayerEngine(rawValue: raw) {
-            PlayerSettings.shared.engine = engine
-        }
         if let raw = prefs["decodeMode"], let mode = DecodeMode(rawValue: raw) {
             PlayerSettings.shared.decodeMode = mode
         }
@@ -375,7 +375,6 @@ final class PreferenceSync {
         var prefs: [String: String] = [:]
         prefs["theme.mode"] = ThemeSettings.shared.mode.rawValue
         prefs["privacy.isEnabled"] = PrivacySettings.shared.isEnabled ? "true" : "false"
-        prefs["playerEngine"] = PlayerSettings.shared.engine.rawValue
         prefs["decodeMode"] = PlayerSettings.shared.decodeMode.rawValue
         if let sub = PlayerSettings.shared.subtitlePreference {
             do {

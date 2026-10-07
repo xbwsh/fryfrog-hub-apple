@@ -9,27 +9,61 @@ struct ProfileView: View {
     @State private var cacheService = MusicCacheService.shared
     @Bindable private var cacheSettings = MusicCacheSettings.shared
 
-    /// 连接状态徽标：当前生效的连接方式 + 颜色圆点
-    private var connectionStatusBadge: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(connectionStatusColor)
-                .frame(width: 10, height: 10)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(connection.hasAnyAddress ? "\(connection.effectiveMode.title)连接" : "未配置")
-                    .font(.callout.weight(.semibold))
-                if connection.hasLAN {
-                    Text("局域网优先，失败自动切公网")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
+    /// 延迟分档配色：<100ms 良好，<300ms 一般，其余较差
+    private func latencyColor(_ ms: Int) -> Color {
+        switch ms {
+        case ..<100: .green
+        case ..<300: .orange
+        default: .red
         }
     }
 
-    private var connectionStatusColor: Color {
-        // 连接正常即为绿色：局域网/公网任一成功连接都表示可用，橙色容易误读为异常
-        connection.hasAnyAddress ? .green : .gray
+    /// 延迟胶囊：右对齐展示，未测出时显示灰色 "--"
+    private func latencyPill(_ ms: Int?) -> some View {
+        let color = ms.map(latencyColor) ?? .gray
+        return Text(ms.map { "\($0) ms" } ?? "--")
+            .font(.caption.weight(.medium).monospacedDigit())
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(color.opacity(0.12)))
+    }
+
+    /// 公网/局域网地址行：图标 + 名称（使用中高亮）+ 地址 + 延迟胶囊
+    @ViewBuilder
+    private func addressRow(_ mode: ServerConnectionMode) -> some View {
+        if let url = connection.urlString(for: mode) {
+            let isActive = connection.effectiveMode == mode
+            HStack(spacing: 10) {
+                Image(systemName: mode == .lan ? "wifi" : "globe")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(isActive ? Color.accentColor : .secondary)
+                    .frame(minWidth: 18)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(mode.title)
+                            .font(.subheadline.weight(.medium))
+                        if isActive {
+                            Text("使用中")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.12)))
+                        }
+                    }
+                    Text(url)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                Spacer(minLength: 8)
+                latencyPill(connection.latency(for: mode))
+            }
+            .padding(.vertical, 2)
+        }
     }
 
     var body: some View {
@@ -89,55 +123,49 @@ struct ProfileView: View {
                 }
 
                 Section {
-                    HStack(spacing: 12) {
-                        connectionStatusBadge
-                        Spacer()
-                        if connection.hasLAN {
-                            Button {
-                                Task { await connection.refreshActiveMode() }
-                            } label: {
-                                if connection.isProbing {
-                                    ProgressView()
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .buttonBorderShape(.circle)
-                            .controlSize(.small)
-                            .disabled(connection.isProbing)
-                            .accessibilityLabel("重新检测局域网")
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("当前使用")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(connection.activeURLString.isEmpty ? "未配置" : connection.activeURLString)
-                            .font(.callout.monospaced())
-                            .textSelection(.enabled)
-                    }
-                    .padding(.vertical, 2)
-
-                    if let publicURL = connection.publicURLString {
-                        LabeledContent("公网地址") {
-                            Text(publicURL)
-                                .font(.footnote.monospaced())
-                                .multilineTextAlignment(.trailing)
-                                .textSelection(.enabled)
-                        }
-                    }
-                    if let lanURL = connection.lanURLString {
-                        LabeledContent("局域网地址") {
-                            Text(lanURL)
-                                .font(.footnote.monospaced())
-                                .multilineTextAlignment(.trailing)
-                                .textSelection(.enabled)
+                    if connection.hasAnyAddress {
+                        addressRow(.public)
+                        addressRow(.lan)
+                    } else {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.gray)
+                                .frame(width: 9, height: 9)
+                            Text("未配置")
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(.secondary)
                         }
                     }
                 } header: {
-                    Text("服务器")
+                    HStack {
+                        Text("服务器")
+                        Spacer()
+                        if connection.hasAnyAddress {
+                            Button {
+                                Task {
+                                    async let modeRefresh: Void = connection.refreshActiveMode()
+                                    async let latencyRefresh: Void = connection.refreshLatencies()
+                                    _ = await (modeRefresh, latencyRefresh)
+                                }
+                            } label: {
+                                if connection.isProbing {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.footnote.weight(.medium))
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                            // 延迟为 3s 静默轮询，不挂 isMeasuringLatency，避免按钮转圈闪烁
+                            .disabled(connection.isProbing)
+                            .accessibilityLabel("重新检测连接")
+                        }
+                    }
+                } footer: {
+                    if connection.hasLAN {
+                        Text("局域网优先，失败自动切公网")
+                    }
                 }
 
                 Section("外观") {
@@ -159,36 +187,19 @@ struct ProfileView: View {
 
                 Section("播放") {
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("播放器内核", systemImage: "play.rectangle.fill")
+                        Label("解码方式", systemImage: "cpu")
                             .font(.subheadline.weight(.medium))
-                        Picker("播放器内核", selection: $playerSettings.engine) {
-                            ForEach(PlayerEngine.allCases) { engine in
-                                Text(engine.title).tag(engine)
+                        Picker("解码方式", selection: $playerSettings.decodeMode) {
+                            ForEach(DecodeMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
                             }
                         }
                         .pickerStyle(.segmented)
-                        Text(playerSettings.engine.detail)
+                        Text(playerSettings.decodeMode.detail)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 4)
-
-                    if playerSettings.engine == .mpv {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label("解码方式", systemImage: "cpu")
-                                .font(.subheadline.weight(.medium))
-                            Picker("解码方式", selection: $playerSettings.decodeMode) {
-                                ForEach(DecodeMode.allCases) { mode in
-                                    Text(mode.title).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            Text(playerSettings.decodeMode.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
                 }
 
                 Section("缓存") {
@@ -198,12 +209,11 @@ struct ProfileView: View {
                         Label("歌曲缓存", systemImage: "arrow.down.circle.fill")
                     }
                     LabeledContent("已用空间", value: cacheService.formattedTotal())
-                    Picker("最大缓存", selection: $cacheSettings.maxBytes) {
-                        ForEach(MusicCacheSizeOption.allCases) { option in
-                            Text(option.title).tag(option.bytes)
-                        }
+                    NavigationLink {
+                        MusicCacheLimitView()
+                    } label: {
+                        LabeledContent("最大缓存", value: cacheSettings.formattedMax())
                     }
-                    .pickerStyle(.navigationLink)
                 }
 
                 Section("隐私") {
@@ -244,6 +254,13 @@ struct ProfileView: View {
             .navigationTitle("我的")
             .navigationBarTitleDisplayMode(.inline)
             .task { cacheService.refresh() }
+            // 停留在本页期间每 3s 轮询延迟；离开页面时 .task 自动取消，停止轮询
+            .task {
+                while !Task.isCancelled {
+                    await connection.refreshLatencies()
+                    try? await Task.sleep(for: .seconds(3))
+                }
+            }
             .onChange(of: cacheSettings.maxBytes) { _, _ in cacheService.enforceLimit() }
         }
     }

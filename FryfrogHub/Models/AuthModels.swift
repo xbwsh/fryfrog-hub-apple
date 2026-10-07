@@ -56,22 +56,28 @@ struct ResetPasswordRequest: Encodable {
 
 // MARK: - 认证响应
 
-/// `POST /api/v1/auth/login` 返回的原始结构（未走统一包装）
+/// `POST /api/v1/auth/login` 返回结构（统一 ApiResponse 包装）
 struct LoginResponse: Decodable {
     let success: Bool
-    let token: String?
     let message: String?
-    let user: User?
+    let data: LoginData?
 }
 
-/// `GET /api/v1/auth/me` 返回结构
-struct MeResponse: Decodable {
-    let success: Bool
-    let user: User?
+/// 登录成功后的数据
+struct LoginData: Decodable {
+    let token: String
+    let user: User
 }
 
-/// `GET /api/v1/auth/status` 返回结构
+/// `GET /api/v1/auth/status` 返回结构（统一 ApiResponse 包装）
 struct AuthStatusResponse: Decodable {
+    let success: Bool
+    let message: String?
+    let data: AuthStatusData?
+}
+
+/// 认证状态数据
+struct AuthStatusData: Decodable {
     let enabled: Bool
 }
 

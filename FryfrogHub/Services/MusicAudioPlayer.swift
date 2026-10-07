@@ -52,9 +52,14 @@ final class MusicAudioPlayer {
             }
         }
     }
-    private(set) var playMode: PlayMode = .order
+    private(set) var playMode: PlayMode {
+        didSet { UserDefaults.standard.set(playMode.rawValue, forKey: Self.playModeKey) }
+    }
+
+    private static let playModeKey = "musicPlayMode"
 
     private init() {
+        playMode = PlayMode(rawValue: UserDefaults.standard.string(forKey: Self.playModeKey) ?? "") ?? .order
         // 延迟激活：不在初始化时抢占 AVAudioSession，避免与 mpv 的 moviePlayback 互斥导致有声无画
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: .mixWithOthers)
         let center = NotificationCenter.default
@@ -99,8 +104,10 @@ final class MusicAudioPlayer {
             queueIndex = queue.firstIndex(of: song) ?? 0
         }
         let url: URL
-        if let local = MusicCacheService.shared.localPlaybackURL(for: song) {
-            url = local
+        // 本地缓存优先（文件 IO 只查一次，播放在线/本地共用同一结果）
+        let localURL = MusicCacheService.shared.localPlaybackURL(for: song)
+        if let localURL {
+            url = localURL
         } else {
             guard let remote = song.streamURL else { return }
             url = remote
@@ -120,11 +127,11 @@ final class MusicAudioPlayer {
             player = AVPlayer(url: url)
             player?.volume = 1
             installTimeObserver()
-        } else if let local = MusicCacheService.shared.localPlaybackURL(for: song),
-                  (player?.currentItem?.asset as? AVURLAsset)?.url != local {
+        } else if let localURL,
+                  (player?.currentItem?.asset as? AVURLAsset)?.url != localURL {
             // 已有缓存后切到本地文件
             let currentTime = player?.currentTime()
-            player = AVPlayer(url: local)
+            player = AVPlayer(url: localURL)
             player?.volume = 1
             if let currentTime { player?.seek(to: currentTime) }
             installTimeObserver()
@@ -132,6 +139,9 @@ final class MusicAudioPlayer {
             // 同一首歌恢复播放时确保音量还原
             player?.volume = 1
         }
+        // 激活音频会话（播放时独占，显示控制中心/锁屏控件）
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+        try? AVAudioSession.sharedInstance().setActive(true, options: [])
         player?.play()
         isPlaying = true
         configureNowPlaying(song)
@@ -146,6 +156,9 @@ final class MusicAudioPlayer {
             pauseWithFade()
         } else {
             cancelFadeAndRestoreVolume()
+            // 激活音频会话
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+            try? AVAudioSession.sharedInstance().setActive(true, options: [])
             player?.volume = 1
             player?.play()
             isPlaying = true
@@ -160,6 +173,9 @@ final class MusicAudioPlayer {
         if player == nil {
             play(currentSong)
         } else {
+            // 激活音频会话
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+            try? AVAudioSession.sharedInstance().setActive(true, options: [])
             player?.volume = 1
             player?.play()
             isPlaying = true
@@ -189,6 +205,9 @@ final class MusicAudioPlayer {
         player?.pause()
         player?.volume = 1
         isPlaying = false
+        // 恢复 mixWithOthers
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: .mixWithOthers)
+        try? AVAudioSession.sharedInstance().setActive(true, options: [])
     }
 
     /// 跳转到指定秒数（用于进度条拖动）
@@ -222,7 +241,11 @@ final class MusicAudioPlayer {
     }
 
     func handleTrackEnded() {
-        guard !queue.isEmpty else { isPlaying = false; return }
+        guard !queue.isEmpty else { 
+            isPlaying = false
+            restoreMixWithOthers()
+            return 
+        }
         switch playMode {
         case .order:
             if queueIndex + 1 < queue.count {
@@ -230,6 +253,7 @@ final class MusicAudioPlayer {
                 play(queue[queueIndex], queue: queue)
             } else {
                 isPlaying = false
+                restoreMixWithOthers()
             }
         case .loop:
             queueIndex = (queueIndex + 1) % queue.count
@@ -251,6 +275,11 @@ final class MusicAudioPlayer {
             queueIndex = next
             play(queue[queueIndex], queue: queue)
         }
+    }
+
+    private func restoreMixWithOthers() {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: .mixWithOthers)
+        try? AVAudioSession.sharedInstance().setActive(true, options: [])
     }
 
     func playNext() {
@@ -307,6 +336,9 @@ final class MusicAudioPlayer {
         isPlaying = false
         currentSong = nil
         position = 0
+        // 恢复 mixWithOthers
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: .mixWithOthers)
+        try? AVAudioSession.sharedInstance().setActive(true, options: [])
     }
 
     // MARK: - 淡入淡出
@@ -347,6 +379,9 @@ final class MusicAudioPlayer {
                 targetPlayer.pause()
                 // 为下次播放恢复满音量（paused 状态下设置不影响当前静音效果）
                 targetPlayer.volume = 1
+                // 恢复 mixWithOthers 以便与其他音频共存（视频播放等）
+                try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: .mixWithOthers)
+                try? AVAudioSession.sharedInstance().setActive(true, options: [])
                 self?.fadeTask = nil
             }
         }
@@ -380,7 +415,7 @@ final class MusicAudioPlayer {
     }
 
     private func configureNowPlaying(_ song: MusicSong) {
-        let info: [String: Any] = [
+        var info: [String: Any] = [
             MPMediaItemPropertyTitle: song.title,
             MPMediaItemPropertyArtist: song.artistName ?? "未知歌手",
             MPMediaItemPropertyAlbumTitle: song.albumName ?? "未知专辑",
@@ -389,6 +424,11 @@ final class MusicAudioPlayer {
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1 : 0,
         ]
         if let coverUrl = song.coverURL {
+            // 优先同步使用内存缓存封面：列表页已展示过的封面直接命中，
+            // 锁屏/AOD 首次渲染时即有封面（异步加载后再覆盖，锁屏可能不即时刷新）
+            if let cached = AuthImageLoader.shared.cached(url: coverUrl) {
+                info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: cached.size) { _ in cached }
+            }
             Task { [weak self] in
                 let image = try? await AuthImageLoader.shared.loadScaled(url: coverUrl)
                 guard let self, self.currentSong?.id == song.id, let image else { return }

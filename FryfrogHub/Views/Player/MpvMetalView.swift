@@ -23,6 +23,11 @@ final class MpvMetalView: UIView {
     private var frameWidth = 0
     private var frameHeight = 0
 
+    /// T5-1 后台渲染：串行队列 + 锁 + 渲染中去重，主线程只做 Metal 提交
+    private let renderQueue = DispatchQueue(label: "com.fryfrog.hub.mpv-render", qos: .userInitiated)
+    private let bufferLock = NSLock()
+    private var isRendering = false
+
     /// 是否需要重绘（mpv 更新回调置位）
     private var needsRedraw = false
     private var didLogSkip = false
@@ -118,18 +123,28 @@ final class MpvMetalView: UIView {
         displayLink = nil
     }
 
-    /// T4-2：控件显示期间将渲染节拍降至 30fps，为控制栏淡入淡出等 UI 动画让出
-    /// 主线程余量；隐藏后恢复设备默认帧率（0 = 跟随 maximumFramesPerSecond）。
-    /// 需在 startRendering 之后调用方生效（displayLink 已创建）。
+    /// T5-1：移除 30fps 限帧（对齐飞牛：后台渲染已为主线程让路，无需压帧）
+    /// 原 T4-2 在控件显期 30fps 会导致 60fps 源抽帧抖动（F-003）且开场 4s 恒 30fps（F-002）；
+    /// 现切后台渲染后全程满帧，控件动画由后台保障。保留方法以兼容容器透传。
     func setControlsVisible(_ visible: Bool) {
-        displayLink?.preferredFramesPerSecond = visible ? 30 : 0
+        // 全程满帧，避免 60fps 抽帧；如需动画窗口内微调，可在此按 visible 做 0.3s 临时限帧
+        _ = visible
+        displayLink?.preferredFramesPerSecond = 0
+        if #available(iOS 15.0, *) {
+            // ProMotion 上 0 已等价于 maximum 帧率，无需 preferredFrameRateRange 额外设置
+        }
     }
 
     deinit {
         stopRendering()
-        if let frameBuffer {
-            free(frameBuffer)
+        // 等待后台渲染完成再释放，避免后台仍持有旧缓冲
+        renderQueue.sync {}
+        bufferLock.lock()
+        if let buf = frameBuffer {
+            free(buf)
+            frameBuffer = nil
         }
+        bufferLock.unlock()
     }
 
     /// 内嵌 MSL 源码：全屏三角形 + BGRA 纹理采样
@@ -169,52 +184,76 @@ final class MpvMetalView: UIView {
     // MARK: - 渲染
 
     @objc private func tick() {
-        guard needsRedraw, frameWidth > 0, frameHeight > 0, let frameBuffer else {
-            // 未就绪时只记录一次，便于判断卡在哪一环
+        // T5-1：主线程只做状态快照与 Metal 提交，软解放到 renderQueue
+        bufferLock.lock()
+        let hasBuffer = frameBuffer != nil
+        let w = frameWidth
+        let h = frameHeight
+        bufferLock.unlock()
+        guard hasBuffer, w > 0, h > 0 else {
             if !didLogSkip {
-                MPVLog.log("tick skip needsRedraw=\(needsRedraw) size=\(frameWidth)x\(frameHeight) buf=\(frameBuffer != nil)")
+                MPVLog.log("tick skip needsRedraw=\(needsRedraw) size=\(w)x\(h) buf=\(hasBuffer)")
                 didLogSkip = true
             }
             return
         }
+        guard needsRedraw, !isRendering else {
+            return
+        }
         needsRedraw = false
+        isRendering = true
 
         #if DEBUG
         if frameCount % 60 == 0 {
-            MPVLog.log("rendered frame \(frameCount) size \(frameWidth)x\(frameHeight)")
+            MPVLog.log("rendered frame \(frameCount) size \(w)x\(h) -> background")
         }
         frameCount += 1
         #endif
 
-        // 1. mpv 软件渲染到 CPU 缓冲区
-        player.renderFrame(
-            to: frameBuffer,
-            width: frameWidth,
-            height: frameHeight,
-            stride: frameStride,
-            flipY: true
-        )
+        // 快照当前缓冲（主线程串行，快照后若 prepareBuffer 重建，旧缓冲通过 renderQueue 延迟释放）
+        bufferLock.lock()
+        guard let buffer = frameBuffer, let texture = frameTexture else {
+            bufferLock.unlock()
+            isRendering = false
+            return
+        }
+        let stride = frameStride
+        let width = frameWidth
+        let height = frameHeight
+        bufferLock.unlock()
 
-        // 2. 上传 Metal 纹理
-        guard let drawable = metalLayer.nextDrawable(),
-              let frameTexture,
-              let commandBuffer = commandQueue.makeCommandBuffer() else { return }
-
-        frameTexture.replace(
-            region: MTLRegionMake2D(0, 0, frameWidth, frameHeight),
-            mipmapLevel: 0,
-            withBytes: frameBuffer,
-            bytesPerRow: frameStride
-        )
-
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPass(drawable)) else { return }
-        encoder.setRenderPipelineState(pipeline)
-        encoder.setFragmentTexture(frameTexture, index: 0)
-        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-        encoder.endEncoding()
-
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
+        // 1. 后台软解（不跳主线程，见 MpvPlayer.renderFrame nonisolated）
+        renderQueue.async { [weak self] in
+            guard let self else { return }
+            self.player.renderFrame(to: buffer, width: width, height: height, stride: stride, flipY: true)
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                // 若后台期间尺寸已变更，丢弃本帧并触发重绘
+                self.bufferLock.lock()
+                let currentW = self.frameWidth
+                let currentH = self.frameHeight
+                self.bufferLock.unlock()
+                if currentW != width || currentH != height {
+                    self.isRendering = false
+                    self.needsRedraw = true
+                    return
+                }
+                guard let drawable = self.metalLayer.nextDrawable(),
+                      let commandBuffer = self.commandQueue.makeCommandBuffer(),
+                      let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.renderPass(drawable)) else {
+                    self.isRendering = false
+                    return
+                }
+                texture.replace(region: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0, withBytes: buffer, bytesPerRow: stride)
+                encoder.setRenderPipelineState(self.pipeline)
+                encoder.setFragmentTexture(texture, index: 0)
+                encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+                encoder.endEncoding()
+                commandBuffer.present(drawable)
+                commandBuffer.commit()
+                self.isRendering = false
+            }
+        }
     }
 
     private func renderPass(_ drawable: CAMetalDrawable) -> MTLRenderPassDescriptor {
@@ -227,11 +266,13 @@ final class MpvMetalView: UIView {
     }
 
     private func prepareBuffer(width: Int, height: Int) {
-        // 仅当尺寸变化时重新分配
-        guard width != frameWidth || height != frameHeight else { return }
-        if let frameBuffer {
-            free(frameBuffer)
+        // T5-1：加锁并延迟释放旧缓冲，避免后台 render 使用中被 free
+        bufferLock.lock()
+        guard width != frameWidth || height != frameHeight else {
+            bufferLock.unlock()
+            return
         }
+        let oldBuffer = frameBuffer
         frameWidth = width
         frameHeight = height
         frameStride = width * 4
@@ -246,6 +287,12 @@ final class MpvMetalView: UIView {
         textureDescriptor.usage = [.shaderRead]
         frameTexture = device.makeTexture(descriptor: textureDescriptor)
         needsRedraw = true
+        bufferLock.unlock()
+        if let old = oldBuffer {
+            renderQueue.async {
+                free(old)
+            }
+        }
         onSizeChange?(CGSize(width: width, height: height))
     }
 }

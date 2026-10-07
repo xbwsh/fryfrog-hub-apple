@@ -100,15 +100,8 @@ struct MusicNowPlayingView: View {
 
     private var topBar: some View {
         HStack(alignment: .center) {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
-            }
-            .buttonStyle(.plain)
+            // 左侧占位（与右侧菜单对称），标题保持居中
+            Color.clear.frame(width: 44, height: 44)
 
             Spacer()
 
@@ -138,7 +131,7 @@ struct MusicNowPlayingView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .background { glassCircle() }
                     .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
             }
         }
@@ -174,7 +167,7 @@ struct MusicNowPlayingView: View {
             .foregroundStyle(selected ? Color.primary : Color.white.opacity(0.62))
             .background {
                 if selected {
-                    Capsule().fill(.ultraThinMaterial)
+                    glassCapsule()
                         .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.5))
                 }
             }
@@ -199,7 +192,7 @@ struct MusicNowPlayingView: View {
                     // 分区 3：进度（与信息用留白分隔，无背景/分割线）
                     progressSection
                         .padding(.top, isCompactHeight ? 20 : 24)
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, 36)
 
                     // 分区 4：控制（与进度留白分隔，无额外背景）
                     controlsSection
@@ -236,7 +229,7 @@ struct MusicNowPlayingView: View {
                 .shadow(color: .black.opacity(0.14), radius: 6, y: 2)
                 .scaleEffect(audioPlayer.isPlaying ? 1.0 : 0.97)
                 .animation(.spring(response: 0.5, dampingFraction: 0.78), value: audioPlayer.isPlaying)
-                // 封面四角信息：与右下角 waveform 同款 ultraThinMaterial 风格，置于封面左右侧
+                // 封面四角信息：液态玻璃风格
                 .overlay(alignment: .topLeading) {
                     if let song = audioPlayer.currentSong, MusicCacheService.shared.isCached(song) {
                         Label("已缓存", systemImage: "arrow.down.circle.fill")
@@ -244,7 +237,7 @@ struct MusicNowPlayingView: View {
                             .foregroundStyle(.white.opacity(0.92))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
-                            .background(.ultraThinMaterial, in: Capsule())
+                            .background { glassCapsule() }
                             .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.5))
                             .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
                             .padding(10)
@@ -257,27 +250,46 @@ struct MusicNowPlayingView: View {
                             .foregroundStyle(.white.opacity(0.88))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
-                            .background(.ultraThinMaterial, in: Capsule())
+                            .background { glassCapsule() }
                             .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.5))
                             .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
                             .padding(10)
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
-                    // 播放状态微光（保留右下角统一样式）
-                    if audioPlayer.isPlaying {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 28, height: 28)
-                            .overlay(Image(systemName: "waveform").font(.caption2.weight(.semibold)).foregroundStyle(.white.opacity(0.9)))
+                    ZStack {
+                        if audioPlayer.isPlaying {
+                            ZStack {
+                                glassCircle()
+                                    .frame(width: 28, height: 28)
+                                Image(systemName: "waveform")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
                             .overlay(Circle().stroke(Color.white.opacity(0.14), lineWidth: 0.5))
                             .padding(12)
                             .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .scale(scale: 0.5).combined(with: .opacity),
+                                    removal: .scale(scale: 0.5).combined(with: .opacity)
+                                )
+                            )
+                            .id("playing-badge")
+                        }
                     }
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: audioPlayer.isPlaying)
                 }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
+        // 点击封面切换到歌词
+        .onTapGesture {
+            guard hasLyrics else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) { showLyrics = true }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        .accessibilityHint("点击查看歌词")
     }
 
     private var songInfo: some View {
@@ -555,6 +567,33 @@ struct MusicNowPlayingView: View {
 
     // MARK: - 歌词容器
 
+    private var hasLyrics: Bool {
+        if let parsedLyrics, !parsedLyrics.isEmpty { return true }
+        if let lyrics, !lyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        return false
+    }
+
+    /// 歌词行：纯文本居中，当前句加粗放大（指示由中央固定线完成）。
+    /// 点击仅限歌词文字（不设 contentShape 整行矩形），空白处点击交给外层返回封面手势
+    private func lyricsRow(_ line: LyricsLine) -> some View {
+        let isCurrent = line.id == currentLyricIndex
+        return Text(line.text.isEmpty ? "♪" : line.text)
+            .font(isCurrent ? .system(size: 22, weight: .bold, design: .rounded) : .system(size: 17, weight: .medium, design: .rounded))
+            .multilineTextAlignment(.center)
+            .foregroundStyle(isCurrent ? Color.white : Color.white.opacity(0.38))
+            .shadow(color: isCurrent ? Color.black.opacity(0.30) : .clear, radius: 10, y: 4)
+            .scaleEffect(isCurrent ? 1.04 : 1.0)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 44)
+            .padding(.vertical, 2)
+            .onTapGesture {
+                audioPlayer.seek(to: line.time)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+            .id(line.id)
+            .animation(.spring(response: 0.36, dampingFraction: 0.82), value: currentLyricIndex)
+    }
+
     private var lyricsContainer: some View {
         VStack(spacing: 0) {
             // 顶部迷你信息 — 改为全宽透明，仅作信息展示，不再用独立卡片背景
@@ -584,6 +623,13 @@ struct MusicNowPlayingView: View {
 
             lyricsView
         }
+        .contentShape(Rectangle())
+        // 点击歌词区域空白处切换到封面（歌词行自身点击仍用于 seek/跳转）
+        .onTapGesture {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) { showLyrics = false }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        .accessibilityHint("点击空白处返回封面")
     }
 
     private var lyricsView: some View {
@@ -591,25 +637,10 @@ struct MusicNowPlayingView: View {
             if let parsedLyrics, !parsedLyrics.isEmpty {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(alignment: .center, spacing: 18) {
+                        LazyVStack(spacing: 18) {
                             Color.clear.frame(height: 28)
                             ForEach(parsedLyrics) { line in
-                                let isCurrent = line.id == currentLyricIndex
-                                Text(line.text.isEmpty ? "♪" : line.text)
-                                    .font(isCurrent ? .system(size: 22, weight: .bold, design: .rounded) : .system(size: 17, weight: .medium, design: .rounded))
-                                    .multilineTextAlignment(.center)
-                                    .foregroundStyle(isCurrent ? Color.white : Color.white.opacity(0.38))
-                                    .shadow(color: isCurrent ? Color.black.opacity(0.30) : .clear, radius: 10, y: 4)
-                                    .scaleEffect(isCurrent ? 1.04 : 1.0)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.horizontal, 28)
-                                    .padding(.vertical, 2)
-                                    .id(line.id)
-                                    .animation(.spring(response: 0.36, dampingFraction: 0.82), value: currentLyricIndex)
-                                    .onTapGesture {
-                                        audioPlayer.seek(to: line.time)
-                                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    }
+                                lyricsRow(line)
                             }
                             Color.clear.frame(height: 80)
                         }
@@ -704,5 +735,25 @@ struct MusicNowPlayingView: View {
             id += 1
         }
         return lines.isEmpty ? nil : lines
+    }
+
+    // MARK: - 液态玻璃
+
+    @ViewBuilder
+    private func glassCircle() -> some View {
+        if #available(iOS 26.0, *) {
+            Circle().fill(.clear).glassEffect(.regular, in: .circle)
+        } else {
+            Circle().fill(.ultraThinMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private func glassCapsule() -> some View {
+        if #available(iOS 26.0, *) {
+            Capsule().fill(.clear).glassEffect(.regular, in: Capsule())
+        } else {
+            Capsule().fill(.ultraThinMaterial)
+        }
     }
 }

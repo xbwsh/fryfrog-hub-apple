@@ -109,6 +109,13 @@ final class ServerConnection: ServerConnectionProtocol {
     /// 正在探测局域网（进度指示用）
     private(set) var isProbing = false
 
+    /// 各连接方式最近一次测得的延迟（毫秒）；nil 表示尚未测量或不可达
+    private(set) var publicLatencyMs: Int?
+    private(set) var lanLatencyMs: Int?
+
+    /// 正在测量延迟（进度指示用）
+    private(set) var isMeasuringLatency = false
+
     /// T3-2：默认读取标准 UserDefaults；测试可注入隔离 suite
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -217,6 +224,44 @@ extension ServerConnection {
         }
     }
 
+    /// 指定连接方式最近一次测得的延迟（毫秒）
+    func latency(for mode: ServerConnectionMode) -> Int? {
+        mode == .lan ? lanLatencyMs : publicLatencyMs
+    }
+
+    /// 测量指定连接方式的请求往返延迟（毫秒）；不可达返回 nil。
+    /// 复用探测端点 `/api/v1/auth/status`，短超时避免页面长时间等待。
+    func measureLatency(for mode: ServerConnectionMode) async -> Int? {
+        guard let base = urlString(for: mode),
+              let url = URL(string: base + "/api/v1/auth/status") else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 3
+        let start = Date()
+        do {
+            let (_, _) = try await lanProbeSession.data(for: request)
+            return max(1, Int((Date().timeIntervalSince(start) * 1000).rounded()))
+        } catch {
+            return nil
+        }
+    }
+
+    /// 并发重新测量所有已配置连接方式的延迟
+    func refreshLatencies() async {
+        await updateIsMeasuring(true)
+        defer { Task { await updateIsMeasuring(false) } }
+
+        await withTaskGroup(of: (ServerConnectionMode, Int?).self) { group in
+            for mode in [ServerConnectionMode.public, .lan] where urlString(for: mode) != nil {
+                group.addTask { (mode, await self.measureLatency(for: mode)) }
+            }
+            for await (mode, ms) in group {
+                await MainActor.run {
+                    if mode == .lan { lanLatencyMs = ms } else { publicLatencyMs = ms }
+                }
+            }
+        }
+    }
+
     /// 重新评估连接方式：局域网优先，不通则退回公网
     func refreshActiveMode() async {
         await updateIsProbing(true)
@@ -245,6 +290,10 @@ extension ServerConnection {
 
     private func updateIsProbing(_ probing: Bool) async {
         await MainActor.run { isProbing = probing }
+    }
+
+    private func updateIsMeasuring(_ measuring: Bool) async {
+        await MainActor.run { isMeasuringLatency = measuring }
     }
 
     private func trimmedHost(_ host: String) -> String {

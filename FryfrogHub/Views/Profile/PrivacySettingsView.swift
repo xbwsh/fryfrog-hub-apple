@@ -8,7 +8,7 @@ struct PrivacySettingsView: View {
             Section {
                 Toggle("隐私模式", isOn: $privacy.isEnabled)
             } footer: {
-                Text("开启后，成人内容将在首页、收藏、日历中隐藏，海报与封面会被模糊遮挡；离开 App 时界面将被遮罩，多任务切换不显示内容预览。")
+                Text("开启后，成人内容将在影视、收藏、日历中隐藏，海报与封面会被模糊遮挡；离开 App 时界面将被遮罩，多任务切换不显示内容预览。")
             }
 
             Section {

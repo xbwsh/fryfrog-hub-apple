@@ -4,6 +4,8 @@ struct LibraryView: View {
     @State private var service = MediaLibraryService.shared
     /// 各资源库最新流水线进度（轮询更新，驱动行的进度条）
     @State private var progressByLibrary: [Int64: PipelineProgressDTO] = [:]
+    /// 进度轮询任务：仅在有扫描运行时持续轮询，空闲即停（避免后台空转）
+    @State private var progressPollTask: Task<Void, Never>?
     /// 新建/编辑目标（nil 时不展示表单）
     @State private var editingTarget: EditTarget?
     /// 待删除的资源库（弹确认框）
@@ -119,7 +121,7 @@ struct LibraryView: View {
                 await service.fetchLibraries()
                 // 扫描/进度属于管理能力，仅 ADMIN 轮询
                 if isAdmin {
-                    await progressPollLoop()
+                    startProgressPolling()
                 }
             }
             .sheet(item: $editingTarget) { target in
@@ -183,6 +185,7 @@ struct LibraryView: View {
             progressByLibrary[library.id] = PipelineProgressDTO(
                 libraryId: library.id, stage: "scan", running: true, percent: 0, currentItem: nil
             )
+            startProgressPolling()
         } catch {
             actionErrorMessage = error.localizedDescription
         }
@@ -191,6 +194,7 @@ struct LibraryView: View {
     private func scanAll() async {
         do {
             try await service.scanAll()
+            startProgressPolling()
         } catch {
             actionErrorMessage = error.localizedDescription
         }
@@ -231,17 +235,35 @@ struct LibraryView: View {
     /// 轮询各资源库流水线进度（自动随视图生命周期取消）
     private func progressPollLoop() async {
         while !Task.isCancelled {
-            await refreshProgress()
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            let running = await refreshProgress()
+            guard running else { return }
+            // 扫描通常秒级~分钟级，2s 间隔足够平滑且省电
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
     }
 
-    private func refreshProgress() async {
-        let ids = service.libraries.map(\.id)
-        for id in ids {
-            let progress = await service.pipelineProgress(id: id)
-            await MainActor.run { progressByLibrary[id] = progress }
+    /// 开始（或重启）进度轮询：先立即刷新一次，保证扫描按钮触发的状态立刻可见
+    private func startProgressPolling() {
+        progressPollTask?.cancel()
+        progressPollTask = Task {
+            await refreshProgress()
+            await progressPollLoop()
         }
+    }
+
+    @discardableResult
+    private func refreshProgress() async -> Bool {
+        let ids = service.libraries.map(\.id)
+        guard !ids.isEmpty else { return false }
+        await withTaskGroup(of: (Int64, PipelineProgressDTO?).self) { group in
+            for id in ids {
+                group.addTask { (id, await service.pipelineProgress(id: id)) }
+            }
+            for await (id, progress) in group {
+                await MainActor.run { progressByLibrary[id] = progress }
+            }
+        }
+        return progressByLibrary.values.contains { $0.isRunning }
     }
 }
 
@@ -337,7 +359,11 @@ private struct LibraryRow: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .foregroundStyle(.secondary)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
+                        .background(Color.white.opacity(0.09), in: Circle())
+                        .contentShape(Rectangle())
                 }
             }
         }
@@ -420,6 +446,7 @@ struct LibraryEditView: View {
                     Picker("类型", selection: $type) {
                         Text("视频").tag("VIDEO")
                         Text("音乐").tag("MUSIC")
+                        Text("有声书").tag("AUDIOBOOK")
                         Text("漫画").tag("COMIC")
                         Text("电子书").tag("EBOOK")
                     }

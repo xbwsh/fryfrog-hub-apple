@@ -24,7 +24,9 @@ final class MpvPlayer {
     var onVideoSize: ((Int, Int) -> Void)?
 
     private var handle: OpaquePointer?
-    private var renderContext: OpaquePointer?
+    // T5-1：renderContext 需支持后台线程 renderFrame 无跳主线程调用，改为手动锁保护
+    nonisolated(unsafe) private var renderContext: OpaquePointer?
+    nonisolated(unsafe) private let renderContextLock = NSLock()
     /// 跨线程停止标志：主线程 shutdown 置 false，事件线程轮询（锁保证可见性）
     private let running = RunningFlag()
     // T1-3 复核结论：此信号量仅用于同步"专用事件线程退出"，wait 发生在主线程同步方法
@@ -43,10 +45,12 @@ final class MpvPlayer {
         if wasRunning {
             _ = eventLoopStopped.wait(timeout: .now() + 1)
         }
-        if let renderContext {
-            mpv_render_context_free(renderContext)
+        renderContextLock.lock()
+        if let ctx = renderContext {
+            mpv_render_context_free(ctx)
             self.renderContext = nil
         }
+        renderContextLock.unlock()
         if let handle {
             mpv_destroy(handle)
             self.handle = nil
@@ -57,9 +61,8 @@ final class MpvPlayer {
     /// - Parameters:
     ///   - url: 播放地址
     ///   - httpHeaders: 附加请求头（如 ["Authorization": "Bearer x"]）
-    ///   - startPosition: 起始位置（秒）
-    func create(url: String, httpHeaders: [String: String], startPosition: Double) throws {
-        MPVLog.log("create url=\(url) start=\(startPosition)")
+    func create(url: String, httpHeaders: [String: String]) throws {
+        MPVLog.log("create url=\(url)")
         guard let ctx = mpv_create() else {
             throw MpvError("创建播放器失败")
         }
@@ -110,10 +113,6 @@ final class MpvPlayer {
         createRenderContext()
         startEventLoop()
 
-        if startPosition > 0 {
-            var pos = startPosition
-            mpv_set_property(ctx, "start", MPV_FORMAT_DOUBLE, &pos)
-        }
         command(["loadfile", url])
     }
 
@@ -143,7 +142,9 @@ final class MpvPlayer {
             onError?("创建渲染上下文失败")
             return
         }
+        renderContextLock.lock()
         renderContext = ctx
+        renderContextLock.unlock()
         MPVLog.log("render context ready (SW)")
 
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
@@ -158,8 +159,13 @@ final class MpvPlayer {
     }
 
     /// 软件渲染一帧到指定 BGRA 缓冲区（须与 MpvRenderView 的缓冲生命周期匹配）
-    func renderFrame(to buffer: UnsafeMutableRawPointer, width: Int, height: Int, stride: Int, flipY: Bool) {
-        guard let renderContext else { return }
+    /// T5-1：改为 nonisolated 以允许后台队列直接调用，不跳主线程；用锁保护 renderContext 生命周期
+    nonisolated func renderFrame(to buffer: UnsafeMutableRawPointer, width: Int, height: Int, stride: Int, flipY: Bool) {
+        renderContextLock.lock()
+        guard let ctx = renderContext else {
+            renderContextLock.unlock()
+            return
+        }
         // SW_SIZE 是 int[2]（宽、高）。必须用元组（元素内联在值中）；不能用数组——
         // &array 指向的是数组结构体（内部堆指针），mpv 会把指针字节当宽高读出垃圾值
         var size = (Int32(width), Int32(height))
@@ -192,12 +198,13 @@ final class MpvPlayer {
                             mpv_render_param(type: MPV_RENDER_PARAM_INVALID, data: nil),
                         ]
                         return params.withUnsafeMutableBufferPointer { paramsBuffer in
-                            mpv_render_context_render(renderContext, paramsBuffer.baseAddress)
+                            mpv_render_context_render(ctx, paramsBuffer.baseAddress)
                         }
                     }
                 }
             }
         }
+        renderContextLock.unlock()
         if result < 0 {
             MPVLog.log("render FAILED result=\(result)")
             mpvLogger.error("render failed result=\(result, privacy: .public)")

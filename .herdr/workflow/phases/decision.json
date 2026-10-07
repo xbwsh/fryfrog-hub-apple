@@ -1,0 +1,10 @@
+{
+  "status": "APPROVED",
+  "attempt": 1,
+  "dispatchedEventId": "ce319932-31f1-416e-aeba-7f2eee604d0c",
+  "acceptedEventId": "7912fb0d-5ee9-4eb6-a3a4-0af12af75432",
+  "report": null,
+  "supersededAttempts": [],
+  "supersededReports": [],
+  "callbackTokenHash": "caec6e7c9037fc80b7b11be756be268016f8f644a25e168ebc2b5b3c87d71ec6"
+}

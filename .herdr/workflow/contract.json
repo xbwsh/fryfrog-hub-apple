@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "workflowId": "development",
+  "template": "development",
+  "roles": {
+    "leader": {
+      "agent": "opencode",
+      "kind": "leader",
+      "readOnly": false,
+      "writablePaths": []
+    },
+    "implementer": {
+      "agent": "claude",
+      "kind": "implementer",
+      "readOnly": false,
+      "writablePaths": [
+        "FryfrogHub/**",
+        "FryfrogHubLiveActivity/**",
+        "project.yml",
+        "FryfrogHub.xcodeproj/**"
+      ]
+    },
+    "reviewer": {
+      "agent": "codex",
+      "kind": "reviewer",
+      "readOnly": true,
+      "writablePaths": []
+    }
+  },
+  "phases": {
+    "design": {
+      "role": "leader",
+      "kind": "design",
+      "needs": [],
+      "join": false,
+      "requiredTests": [],
+      "protected": false,
+      "callback": {
+        "type": "plan",
+        "requiredFields": [
+          "plan_path",
+          "accepted"
+        ]
+      }
+    },
+    "implement": {
+      "role": "implementer",
+      "kind": "implementation",
+      "needs": [
+        "design"
+      ],
+      "join": false,
+      "requiredTests": [
+        "unit"
+      ],
+      "protected": false,
+      "callback": {
+        "type": "implementation_complete",
+        "requiredFields": [
+          "changed_files",
+          "test_results"
+        ]
+      }
+    },
+    "review": {
+      "role": "reviewer",
+      "kind": "review",
+      "needs": [
+        "implement"
+      ],
+      "join": false,
+      "requiredTests": [],
+      "protected": false,
+      "callback": {
+        "type": "review_complete",
+        "requiredFields": [
+          "verdict",
+          "findings"
+        ]
+      }
+    },
+    "rework": {
+      "role": "leader",
+      "kind": "rework",
+      "needs": [
+        "review"
+      ],
+      "join": false,
+      "requiredTests": [],
+      "protected": false,
+      "callback": {
+        "type": "rework_decision",
+        "requiredFields": [
+          "required",
+          "instructions"
+        ]
+      }
+    },
+    "verify": {
+      "role": "reviewer",
+      "kind": "verification",
+      "needs": [
+        "rework"
+      ],
+      "join": false,
+      "requiredTests": [],
+      "protected": false,
+      "callback": {
+        "type": "verification_complete",
+        "requiredFields": [
+          "verdict",
+          "evidence"
+        ]
+      }
+    },
+    "decision": {
+      "role": "leader",
+      "kind": "decision",
+      "needs": [
+        "verify"
+      ],
+      "join": false,
+      "requiredTests": [],
+      "protected": true,
+      "callback": {
+        "type": "final_decision",
+        "requiredFields": [
+          "decision",
+          "rationale"
+        ]
+      }
+    }
+  },
+  "finalPhaseId": "decision",
+  "maxAutoHops": 8,
+  "maxRework": 5,
+  "compiledAt": "2026-08-22T06:37:05.625Z"
+}
