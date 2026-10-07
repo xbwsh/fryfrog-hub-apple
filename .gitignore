@@ -23,3 +23,6 @@ diag.txt
 
 # Claude 本机配置
 .claude/settings.local.json
+
+# AI 工作流本地产物（.herdr 不入库）
+.herdr/
