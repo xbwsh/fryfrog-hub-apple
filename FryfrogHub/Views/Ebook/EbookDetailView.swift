@@ -3,7 +3,8 @@ import SwiftUI
 /// 电子书详情页
 struct EbookDetailView: View {
     let bookId: Int64
-    @State private var service = EbookService.shared
+    // 独立实例：共用单例时 selectedBook 残留上一本书（同 ComicDetailView）
+    @State private var service = EbookService()
     @State private var showingMarkCompleted = false
     @State private var showingUnbind = false
     @State private var showingScrape = false

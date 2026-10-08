@@ -3,7 +3,8 @@ import SwiftUI
 /// 有声书详情页
 struct AudiobookDetailView: View {
     let bookId: Int64
-    @State private var service = AudiobookService.shared
+    // 独立实例：共用单例时 selectedBook 残留上一本书（同 ComicDetailView）
+    @State private var service = AudiobookService()
     @State private var player = AudiobookPlayerService.shared
     @State private var showingMarkCompleted = false
     @State private var showingUnbind = false

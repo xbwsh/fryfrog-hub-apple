@@ -3,7 +3,9 @@ import SwiftUI
 /// 漫画详情页
 struct ComicDetailView: View {
     let comicId: Int64
-    @State private var service = ComicService.shared
+    // 独立实例：共用单例时 selectedComic 残留上一本书——新书加载中/失败都会渲染旧书
+    // （错误分支因 comic 非空永远走不到），且"开始阅读"会拿着旧书进入阅读器
+    @State private var service = ComicService()
     @State private var showingMarkCompleted = false
     @State private var showingUnbind = false
     @State private var showingScrape = false

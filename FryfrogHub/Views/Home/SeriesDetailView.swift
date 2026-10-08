@@ -7,7 +7,11 @@ struct SeriesDetailView: View {
     /// 初始选中的季（追更日历跳转用；nil 时使用记忆的季）
     let initialSeason: Int?
 
-    @State private var service = VideoService.shared
+    // 每个详情页持独立实例：此前共用 VideoService.shared，页面 A 进入会 reset() 抹掉
+    // 导航栈里下层详情 B 的数据，A 的 task 被取消时还会把"取消错误"写进 B 正在显示的
+    // errorMessage/isLoading；播放器关闭后的延迟 fetch 也可能覆盖已进入的另一部剧。
+    // 本页的刷新都走自身 fetch() 回调，无状态方法（封面/Logo/TMDB 弹窗）仍共用单例
+    @State private var service = VideoService()
     @State private var favorite: Bool
     @State private var busyAction: String?
     @State private var actionError: String?
