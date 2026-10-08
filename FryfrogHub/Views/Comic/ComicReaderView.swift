@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 漫画阅读器：按卷/话分页阅读，页图走签名 URL，翻页节流上报进度
+/// 漫画阅读器：纵向滚动（默认）/横向翻页双模式（对齐 Android 端），按卷切换，页图走签名 URL，进度逐页上报
 struct ComicReaderView: View {
     let comic: ComicDetailDTO
     let target: ComicDetailView.ReadingTarget
@@ -13,6 +13,11 @@ struct ComicReaderView: View {
     @State private var isLoadingPages = false
     @State private var loadErrorMessage: String?
     @State private var lastReported: (Int, Int) = (-1, -1)
+
+    /// 阅读方向：默认纵向连续滚动（对齐 Android 端），顶栏可切换；不持久化，每次进入复位
+    @State private var readingVertical = true
+    /// 纵向模式下当前置顶页 id（scrollPosition 跟踪）
+    @State private var scrollID: Int?
 
     /// 每卷起始的全局进度位置（用于顶部百分比显示）
     private var chapters: [ComicDetailDTO.ChapterDTO] { comic.chapters ?? [] }
@@ -48,6 +53,14 @@ struct ComicReaderView: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    readingVertical.toggle()
+                } label: {
+                    Image(systemName: readingVertical ? "arrow.up.and.down" : "arrow.left.and.right")
+                }
+                .accessibilityLabel(readingVertical ? "切换为翻页" : "切换为滚动")
+            }
         }
         .task(id: chapterIndex) {
             await loadPages()
@@ -61,22 +74,14 @@ struct ComicReaderView: View {
 
     private var pageReader: some View {
         VStack(spacing: 0) {
-            TabView(selection: $currentPageIndex) {
-                ForEach(pageURLs.indices, id: \.self) { index in
-                    AsyncImage(url: pageURLs[index]) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    } placeholder: {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    .tag(index)
+            Group {
+                if readingVertical {
+                    verticalReader
+                } else {
+                    horizontalReader
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .background(Color.black)
-            .onChange(of: currentPageIndex) { _ in
+            .onChange(of: currentPageIndex) { _, _ in
                 reportProgress()
                 prefetch(around: currentPageIndex)
             }
@@ -118,6 +123,56 @@ struct ComicReaderView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(.thinMaterial)
+        }
+    }
+
+    /// 横向翻页（左右滑动）
+    private var horizontalReader: some View {
+        TabView(selection: $currentPageIndex) {
+            ForEach(pageURLs.indices, id: \.self) { index in
+                pageView(at: index)
+                    .tag(index)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .background(Color.black)
+    }
+
+    /// 纵向连续滚动（上下滑动，对齐 Android 端 readerModeScroll：页间距 + 45% 焦点线选页）
+    private var verticalReader: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(pageURLs.indices, id: \.self) { index in
+                        pageView(at: index)
+                            .id(index)
+                    }
+                }
+            }
+            .background(Color.black)
+            .scrollPosition(id: $scrollID, anchor: UnitPoint(x: 0.5, y: 0.45))
+            .onChange(of: scrollID) { _, newID in
+                guard let newID, newID != currentPageIndex,
+                      pageURLs.indices.contains(newID) else { return }
+                currentPageIndex = newID
+            }
+            .onAppear {
+                proxy.scrollTo(currentPageIndex, anchor: .top)
+            }
+            .onChange(of: pageURLs) { _, _ in
+                proxy.scrollTo(currentPageIndex, anchor: .top)
+            }
+        }
+    }
+
+    private func pageView(at index: Int) -> some View {
+        AsyncImage(url: pageURLs[index]) { image in
+            image
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+        } placeholder: {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
