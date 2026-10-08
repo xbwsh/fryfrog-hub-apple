@@ -24,6 +24,8 @@ final class MpvPlayer {
     var onVideoSize: ((Int, Int) -> Void)?
 
     private var handle: OpaquePointer?
+    /// 当前加载的播放地址（供播完后 replay 重新 loadfile）
+    private var currentURL: String?
     // T5-1：renderContext 需支持后台线程 renderFrame 无跳主线程调用，改为手动锁保护
     nonisolated(unsafe) private var renderContext: OpaquePointer?
     nonisolated(unsafe) private let renderContextLock = NSLock()
@@ -57,6 +59,26 @@ final class MpvPlayer {
         }
     }
 
+    /// 断开所有状态回调。持有者销毁时调用，打断
+    /// "player → 闭包 → 视图 @State → player" 引用环，并阻止迟到的事件回调触碰已销毁视图。
+    func clearCallbacks() {
+        onPosition = nil
+        onDuration = nil
+        onPauseChanged = nil
+        onEndReached = nil
+        onReady = nil
+        onError = nil
+        onCacheDuration = nil
+        onFrame = nil
+        onVideoSize = nil
+    }
+
+    /// 从头重新加载当前文件（播放结束后重播；http-header-fields 仍是 create 时的选项，无需重传）
+    func replay() {
+        guard let handle, let currentURL else { return }
+        command(["loadfile", currentURL])
+    }
+
     /// 创建并初始化播放器实例
     /// - Parameters:
     ///   - url: 播放地址
@@ -67,6 +89,7 @@ final class MpvPlayer {
             throw MpvError("创建播放器失败")
         }
         handle = ctx
+        currentURL = url
 
         mpv_set_option_string(ctx, "idle", "yes")
         mpv_set_option_string(ctx, "keep-open", "no")

@@ -4,6 +4,20 @@ import MetalKit
 import QuartzCore
 import os
 
+/// CADisplayLink 的弱引用代理 target：displayLink 强持有本对象而非视图，
+/// 切断 视图 → displayLink → 视图 引用环（否则视图永不 deinit，displayLink 永久 tick）
+private final class DisplayLinkProxy: NSObject {
+    weak var view: MpvMetalView?
+
+    init(view: MpvMetalView) {
+        self.view = view
+    }
+
+    @objc func handleTick() {
+        view?.tick()
+    }
+}
+
 /// 用 Metal 显示 mpv 软件渲染输出的视频画面。
 /// 渲染循环：CADisplayLink 驱动 → mpv 软件渲染到 CPU 缓冲区 → 上传 Metal 纹理 → 全屏三角形绘制。
 final class MpvMetalView: UIView {
@@ -15,6 +29,8 @@ final class MpvMetalView: UIView {
     private let library: MTLLibrary
     private let pipeline: MTLRenderPipelineState
     private var displayLink: CADisplayLink?
+    /// displayLink 强持有的代理 target（弱引用回视图），见 startRendering 注释
+    private var displayLinkProxy: DisplayLinkProxy?
 
     /// 渲染目标缓冲区（BGRA）与复用纹理
     private var frameBuffer: UnsafeMutableRawPointer?
@@ -113,7 +129,13 @@ final class MpvMetalView: UIView {
 
     func startRendering() {
         guard displayLink == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(tick))
+        // CADisplayLink 强持有 target。若 target 直接是 self，会形成
+        // 视图 → displayLink → 视图 的引用环：stopRendering/deinit 永不执行，
+        // 每次播放泄漏帧缓冲 + Metal 资源，displayLink 还会以屏幕刷新率永久唤醒主线程。
+        // 经弱引用代理承接，环被切断，deinit 正常执行并 invalidate。
+        let proxy = DisplayLinkProxy(view: self)
+        displayLinkProxy = proxy
+        let link = CADisplayLink(target: proxy, selector: #selector(DisplayLinkProxy.handleTick))
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
@@ -121,6 +143,7 @@ final class MpvMetalView: UIView {
     func stopRendering() {
         displayLink?.invalidate()
         displayLink = nil
+        displayLinkProxy = nil
     }
 
     /// T5-1：移除 30fps 限帧（对齐飞牛：后台渲染已为主线程让路，无需压帧）
@@ -183,7 +206,7 @@ final class MpvMetalView: UIView {
 
     // MARK: - 渲染
 
-    @objc private func tick() {
+    fileprivate func tick() {
         // T5-1：主线程只做状态快照与 Metal 提交，软解放到 renderQueue
         bufferLock.lock()
         let hasBuffer = frameBuffer != nil

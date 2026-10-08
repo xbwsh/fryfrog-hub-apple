@@ -32,6 +32,12 @@ struct MpvMetalViewContainer: UIViewRepresentable {
     func updateUIView(_ view: UIView, context: Context) {
         (view as? MpvMetalView)?.setControlsVisible(controlsVisible)
     }
+
+    /// 视图被移除（如 videoSize 两分支切换、播放页关闭）时立即停掉 displayLink，
+    /// 不等 dealloc，避免拆卸窗口期 displayLink 继续唤醒主线程
+    static func dismantleUIView(_ uiView: UIView, coordinator: ()) {
+        (uiView as? MpvMetalView)?.stopRendering()
+    }
 }
 
 #Preview {

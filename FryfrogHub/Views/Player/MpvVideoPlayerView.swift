@@ -31,6 +31,10 @@ struct MpvVideoPlayerView: View {
     @State private var isScrubbing = false
     @State private var scrubValue: Double = 0
     @State private var saved = false
+    /// 播放到结尾（仅上报进度+展示完成浮层，不销毁播放器）
+    @State private var isFinished = false
+    /// 重新播放时跳过一次续播 seek（否则重播会跳回首次打开的续播位置）
+    @State private var suppressResumeSeek = false
     @State private var errorMessage: String?
     @State private var checkpointTimer: Timer?
     @State private var videoSize: CGSize?
@@ -234,6 +238,35 @@ struct MpvVideoPlayerView: View {
                 .padding(.horizontal, 32)
             }
         }
+        .overlay {
+            // 播放完成浮层：原实现走到 saveProgress()（销毁播放器）导致画面永久"准备中…"
+            if isFinished {
+                VStack(spacing: 16) {
+                    Text("播放完毕")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.white)
+                    HStack(spacing: 28) {
+                        Button {
+                            replayFromStart()
+                        } label: {
+                            Label("重新播放", systemImage: "arrow.counterclockwise")
+                        }
+                        Button {
+                            // 退出清理统一走 onDisappear → saveProgress()
+                            dismiss()
+                        } label: {
+                            Label("关闭", systemImage: "xmark")
+                        }
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+                .transition(.opacity)
+            }
+        }
         .statusBarHidden(!controlsVisible)
         .background(
             // 隐藏的 MPVolumeView，抓取内部滑杆用于手势调系统音量
@@ -263,7 +296,10 @@ struct MpvVideoPlayerView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
-                saveProgress()
+                // 进后台仅上报进度（防杀进程丢进度），播放器保持存活以支持
+                // 后台音频/锁屏控制；真正销毁在 onDisappear 的 saveProgress()。
+                // （原实现在此直接销毁播放器且无回前台重建路径 → 切后台回来永久"准备中…"）
+                checkpointSave()
             }
         }
         .onChange(of: isPlaying) { _, playing in
@@ -1205,6 +1241,13 @@ struct MpvVideoPlayerView: View {
             }
         }
 
+        // 上面存在多个 await：期间视图可能已被关掉（.task 取消，onDisappear 已执行
+        // saveProgress 置 saved）。此处不校验会创建出无人 shutdown 的孤儿播放器
+        // （事件线程永久轮询、退出后音频继续外放）
+        if Task.isCancelled || saved {
+            return
+        }
+
         let newPlayer = MpvPlayer()
         newPlayer.onPosition = { [self] position in
             // 节流：mpv 按帧回调 time-pos，若逐帧写 @State 则整个 body 每帧重算，
@@ -1232,7 +1275,7 @@ struct MpvVideoPlayerView: View {
             updateNowPlayingInfo()
         }
         newPlayer.onEndReached = {
-            saveProgress()
+            handlePlaybackFinished()
         }
         newPlayer.onError = { message in
             errorMessage = message
@@ -1248,9 +1291,11 @@ struct MpvVideoPlayerView: View {
                     updateNowPlayingInfo()
                 }
                 // 续播：文件就绪后 seek 到记录位置（比 create 时的 start 属性更可靠）
-                if resume > 0 {
+                // 重新播放（suppressResumeSeek）时跳过，从头开始
+                if resume > 0, !suppressResumeSeek {
                     newPlayer.seek(to: resume)
                 }
+                suppressResumeSeek = false
             }
         }
 
@@ -1273,6 +1318,10 @@ struct MpvVideoPlayerView: View {
                 playbackURL = resolved
             } else {
                 playbackURL = service.streamURL(id: videoId).absoluteString
+            }
+            // freshStreamPath 也是 await：创建播放器前再校验一次（同上，防孤儿实例）
+            if Task.isCancelled || saved {
+                return
             }
             try newPlayer.create(
                 url: playbackURL,
@@ -1333,10 +1382,35 @@ struct MpvVideoPlayerView: View {
         checkpointTimer = nil
         checkpointSave()
         player?.shutdown()
+        // 断开回调，打断 player → 闭包 → 视图 @State 的引用环（否则实例永不释放），
+        // 并阻止已入队的事件回调再触碰已销毁视图的状态
+        player?.clearCallbacks()
         player = nil
         clearNowPlayingInfo()
         // 恢复音乐播放器的音频会话配置
         restoreMusicAudioSession()
+    }
+
+    /// 播放到结尾：只上报最终进度并展示"播放完毕"浮层，不销毁播放器
+    /// （原实现复用 saveProgress()，把播放页变成无法恢复的"准备中…"）
+    private func handlePlaybackFinished() {
+        guard !isFinished else { return }
+        isFinished = true
+        isPlaying = false
+        checkpointSave()
+        updateNowPlayingInfo()
+    }
+
+    /// 从头重播：重新加载当前文件（续播 seek 由 suppressResumeSeek 跳过一次）
+    private func replayFromStart() {
+        guard let player else { return }
+        isFinished = false
+        suppressResumeSeek = true
+        player.replay()
+        player.play()
+        isPlaying = true
+        scheduleAutoHide()
+        updateNowPlayingInfo()
     }
 
     private func restoreMusicAudioSession() {
