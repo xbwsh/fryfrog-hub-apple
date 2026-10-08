@@ -155,7 +155,8 @@ struct MusicPlaylistDetail: Decodable {
     let comment: String?
     let isPublic: Bool?
     let createdAt: String?
-    let songs: [MusicSong]?
+    /// var：滑删后本地先移除该曲，保证下一次滑删用的索引与服务端一致（防删错歌）
+    var songs: [MusicSong]?
 
     enum CodingKeys: String, CodingKey {
         case id, name, comment, createdAt, songs

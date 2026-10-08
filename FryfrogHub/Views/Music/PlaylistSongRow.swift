@@ -5,8 +5,9 @@ struct PlaylistSongRow: View {
     let song: MusicSong
     let songs: [MusicSong]
     let playlist: MusicPlaylistDetail?
+    /// 滑删回调（携带曲目下标）：由父视图执行删除+本地移除+重取，保证索引一致
+    var onRemove: ((Int) -> Void)? = nil
     private let audio = MusicAudioPlayer.shared
-    private let service = MusicService.shared
     var body: some View {
         HStack(spacing: 12) {
             Text("\(idx + 1)")
@@ -36,11 +37,8 @@ struct PlaylistSongRow: View {
         .onTapGesture { audio.play(song, queue: songs) }
         .swipeActions {
             Button(role: .destructive) {
-                guard let pid = playlist?.id else { return }
-                Task {
-                    try? await service.removeSongsFromPlaylist(id: pid, indexes: [idx])
-                    GlobalNotice.shared.show("已移除")
-                }
+                guard playlist?.id != nil else { return }
+                onRemove?(idx)
             } label: {
                 Label("移除", systemImage: "trash")
             }

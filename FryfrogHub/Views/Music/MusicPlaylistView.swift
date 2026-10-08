@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MusicPlaylistView: View {
     let playlist: MusicPlaylist
+    @Environment(\.dismiss) private var dismiss
     @State private var detail: MusicPlaylistDetail?
     @State private var isLoading = true
     private let service = MusicService.shared
@@ -36,8 +37,13 @@ struct MusicPlaylistView: View {
                                 Menu {
                                     Button(role: .destructive) {
                                         Task {
-                                            try? await service.deletePlaylist(id: playlist.id)
-                                            GlobalNotice.shared.show("已删除歌单")
+                                            do {
+                                                try await service.deletePlaylist(id: playlist.id)
+                                                GlobalNotice.shared.show("已删除歌单")
+                                                dismiss()
+                                            } catch {
+                                                GlobalNotice.shared.show("删除失败：\(error.localizedDescription)")
+                                            }
                                         }
                                     } label: { Label("删除歌单", systemImage: "trash") }
                                 } label: {
@@ -49,7 +55,7 @@ struct MusicPlaylistView: View {
                     Section("曲目") {
                         ForEach(songs.indices, id: \.self) { idx in
                             let song = songs[idx]
-                            PlaylistSongRow(idx: idx, song: song, songs: songs, playlist: detail)
+                            PlaylistSongRow(idx: idx, song: song, songs: songs, playlist: detail) { removeSong(at: $0) }
                         }
                     }
                 }
@@ -61,6 +67,31 @@ struct MusicPlaylistView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle(playlist.name).navigationBarTitleDisplayMode(.inline)
         .task { isLoading = true; defer { isLoading = false }; detail = try? await service.fetchPlaylistDetail(id: playlist.id) }
-        .refreshable { detail = try? await service.fetchPlaylistDetail(id: playlist.id) }
+        .refreshable {
+            // 失败时保留已加载内容，不清空（原实现 try? 置 nil 会掉到"加载失败"空态）
+            if let updated = try? await service.fetchPlaylistDetail(id: playlist.id) {
+                detail = updated
+            }
+        }
+    }
+
+    /// 滑删曲目：成功后先本地移除（索引立即与服务端对齐，防连续滑删删错歌），再重取权威数据；
+    /// 失败如实提示，不再无条件报"已移除"
+    private func removeSong(at idx: Int) {
+        let pid = playlist.id
+        Task {
+            do {
+                try await service.removeSongsFromPlaylist(id: pid, indexes: [idx])
+                if detail?.songs?.indices.contains(idx) == true {
+                    detail?.songs?.remove(at: idx)
+                }
+                if let updated = try? await service.fetchPlaylistDetail(id: pid) {
+                    detail = updated
+                }
+                GlobalNotice.shared.show("已移除")
+            } catch {
+                GlobalNotice.shared.show("移除失败：\(error.localizedDescription)")
+            }
+        }
     }
 }
