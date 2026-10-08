@@ -1,6 +1,9 @@
 import Foundation
 import Observation
 
+/// 与 MusicService 等一致整体标注 @MainActor：groups/isLoading 仅主线程变更
+/// （此前 fetchHomeContent 的 defer/catch 在通用执行器写状态，主线程同时遍历渲染 → 竞态）
+@MainActor
 @Observable
 final class HomeService {
     static let shared = HomeService()

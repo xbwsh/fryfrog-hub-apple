@@ -2,6 +2,10 @@ import Foundation
 import Observation
 import UIKit
 
+/// 与 MusicService 等一致整体标注 @MainActor：isAuthenticated/currentUser 仅主线程读写。
+/// 此前 restoreSession/login 在通用执行器写、handleServerRejected 经 MainActor.run 写、
+/// RootView 主线程读，同一组字段存在两条隔离规则（TSan 下真实数据竞争）
+@MainActor
 @Observable
 final class AuthService {
     static let shared = AuthService()
@@ -39,10 +43,8 @@ final class AuthService {
     private func handleServerRejected() async {
         tokenStore.delete()
         await client.setToken(nil)
-        await MainActor.run {
-            currentUser = nil
-            isAuthenticated = false
-        }
+        currentUser = nil
+        isAuthenticated = false
     }
 
     /// 上次登录用的用户名（登录页预填，默认 admin）

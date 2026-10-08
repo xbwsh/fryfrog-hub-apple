@@ -1,6 +1,8 @@
 import Foundation
 import Observation
 
+/// 与 MusicService 等一致整体标注 @MainActor：libraries/isLoading 仅主线程变更
+@MainActor
 @Observable
 final class MediaLibraryService {
     static let shared = MediaLibraryService()

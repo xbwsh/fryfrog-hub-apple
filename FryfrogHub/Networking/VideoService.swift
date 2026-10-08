@@ -11,6 +11,9 @@ struct SubtitleFile: Codable, Identifiable {
 }
 
 /// 视频详情页数据服务：详情、演员、观看进度
+/// 与 MusicService 等一致整体标注 @MainActor：detail/movie/actors 仅主线程变更
+/// （此前 load/loadActors 的 defer/catch 在通用执行器写，与主线程渲染竞态）
+@MainActor
 @Observable
 final class VideoService {
     static let shared = VideoService()

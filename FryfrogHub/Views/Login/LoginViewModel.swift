@@ -1,6 +1,8 @@
 import Foundation
 import Observation
 
+/// 登录表单状态仅主线程读写（errorMessage/isLoading 与 LoginView 的绑定同线程）
+@MainActor
 @Observable
 final class LoginViewModel {
     /// 协议仅支持 http/https
