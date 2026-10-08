@@ -23,6 +23,8 @@ final class ActorWorksTests: XCTestCase {
     }
 
     /// 经 URLProtocol 桩构造的 Service（依赖注入，不走真实网络）
+    /// VideoService 为 @MainActor，本类构造与用例均切到主线程域
+    @MainActor
     private func makeService() -> VideoService {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [StubURLProtocol.self]
@@ -31,13 +33,13 @@ final class ActorWorksTests: XCTestCase {
     }
 
     /// 有内容（HTTP 200）：系列与独立视频混合、按系列聚合、分页信息完整
-    func test_worksWithContent() async throws {
+    @MainActor func test_worksWithContent() async throws {
         StubURLProtocol.setBehavior(.init(outcome: .success(200, """
         {
           "success": true,
           "data": {
             "content": [
-              { "id": 900, "type": "series", "title": "流浪地球系列", "year": 2019, "numberOfSeasons": 2, "episodeCount": 20 },
+              { "id": 900, "type": "series", "title": "流浪地球系列", "mediaType": "tv", "year": 2019, "numberOfSeasons": 2, "episodeCount": 20 },
               { "id": 12, "type": "standalone", "title": "战狼", "year": 2017 }
             ],
             "page": 0, "size": 20, "totalElements": 2, "totalPages": 1
@@ -60,7 +62,7 @@ final class ActorWorksTests: XCTestCase {
     }
 
     /// 无内容（HTTP 200）：不抛错，返回空 content
-    func test_worksEmptyList() async throws {
+    @MainActor func test_worksEmptyList() async throws {
         StubURLProtocol.setBehavior(.init(outcome: .success(200, """
         {
           "success": true,
@@ -76,7 +78,7 @@ final class ActorWorksTests: XCTestCase {
     }
 
     /// 演员不存在（HTTP 404）：抛 httpError(404)，message 透传后端提示
-    func test_actorNotFoundThrows404() async {
+    @MainActor func test_actorNotFoundThrows404() async {
         StubURLProtocol.setBehavior(.init(outcome: .success(404, """
         { "success": false, "message": "VideoActor not found with id: 999" }
         """)), for: "primary.test")
