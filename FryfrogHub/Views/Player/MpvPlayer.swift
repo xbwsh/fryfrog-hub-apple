@@ -36,6 +36,8 @@ final class MpvPlayer {
     private let eventLoopStopped = DispatchSemaphore(value: 0)
     private(set) var videoWidth = 0
     private(set) var videoHeight = 0
+    /// 本 app 经 sub-add 加载过的外挂字幕轨 id（track-list 随文件加载清空，见 FILE_LOADED）
+    private var addedExternalSubIDs: Set<Int> = []
 
     private let propertyUserData: UInt64 = 1
 
@@ -111,8 +113,9 @@ final class MpvPlayer {
             let fields = httpHeaders.map { "\($0.key): \($0.value)" }.joined(separator: ",\r\n")
             mpv_set_option_string(ctx, "http-header-fields", fields)
         }
-        // 外挂字幕自动加载（同目录同名）
-        mpv_set_option_string(ctx, "sub-auto", "fuzzy")
+        // 外挂字幕经菜单 sub-add 加载（列表来自后端同目录扫描）；
+        // 关闭同名 sidecar 自动探测——对 /api/... 流地址只会打一串 404 噪音，且本后端流地址旁不存在可探测文件
+        mpv_set_option_string(ctx, "sub-auto", "no")
 
         let initResult = mpv_initialize(ctx)
         MPVLog.log("initialize result=\(initResult)")
@@ -303,7 +306,7 @@ final class MpvPlayer {
         case external(url: String)
     }
 
-    /// 读取当前字幕轨列表（track-list，仅内置轨；外挂轨经 sub-add 后也会出现在列表末尾）
+    /// 读取当前字幕轨列表（track-list，含容器内置轨与 sub-add 加载的外挂轨）
     func fetchSubtitleTracks() -> [SubtitleTrack] {
         guard let handle else { return [] }
         var count: Int64 = 0
@@ -326,7 +329,7 @@ final class MpvPlayer {
         return tracks
     }
 
-    /// 应用字幕选择（先移除旧外挂轨，避免与内置轨叠加显示）
+    /// 应用字幕选择（先移除本 app 加载过的外挂轨，避免 track-list 无限增长）
     func selectSubtitle(_ selection: SubtitleSelection) {
         guard let handle else { return }
         removeExternalSubtitles()
@@ -336,28 +339,41 @@ final class MpvPlayer {
         case .builtin(let sid):
             mpv_set_property_string(handle, "sid", String(sid))
         case .external(let url):
+            let before = externalTrackIDs()
             command(["sub-add", url, "select"])
+            // 记录本次 sub-add 新增的轨 id（仅这些可被 sub-remove），供下次切换时清理；
+            // mpv 对不支持的格式 sub-add 会失败，此时无新增 id，静默无副作用
+            addedExternalSubIDs.formUnion(externalTrackIDs().subtracting(before))
         }
     }
 
-    /// 移除所有外挂字幕轨（sub-remove 只接受数字轨道 id，不支持 "all"）
+    /// 移除本 app 经 sub-add 加载过的外挂字幕轨。
+    /// 只删自己加的：mpv 属性名是 external（track-list/N/external，0.36 无 is-external），
+    /// 且 sub-auto 自动加载的 sidecar 轨也是 external——不能碰，否则"选中后先被删再设 sid"会选到已删除的 id
     private func removeExternalSubtitles() {
-        guard let handle else { return }
-        var count: Int64 = 0
-        guard mpv_get_property(handle, "track-list/count", MPV_FORMAT_INT64, &count) >= 0 else { return }
-        var externalIds: [Int] = []
-        for i in 0..<count {
-            var isExternal: Int32 = 0
-            mpv_get_property(handle, "track-list/\(i)/is-external", MPV_FORMAT_FLAG, &isExternal)
-            if isExternal == 1 {
-                var trackId: Int64 = -1
-                mpv_get_property(handle, "track-list/\(i)/id", MPV_FORMAT_INT64, &trackId)
-                if trackId > 0 { externalIds.append(Int(trackId)) }
-            }
-        }
-        for id in externalIds {
+        guard let handle, !addedExternalSubIDs.isEmpty else { return }
+        for id in addedExternalSubIDs {
             command(["sub-remove", String(id)])
         }
+        addedExternalSubIDs.removeAll()
+    }
+
+    /// 当前 track-list 中所有外挂字幕轨 id（track-list/N/external == 1）
+    private func externalTrackIDs() -> Set<Int> {
+        guard let handle else { return [] }
+        var count: Int64 = 0
+        guard mpv_get_property(handle, "track-list/count", MPV_FORMAT_INT64, &count) >= 0 else { return [] }
+        var ids: Set<Int> = []
+        for i in 0..<count {
+            var isExternal: Int32 = 0
+            mpv_get_property(handle, "track-list/\(i)/external", MPV_FORMAT_FLAG, &isExternal)
+            if isExternal == 1 {
+                if let id = int64Property("track-list/\(i)/id"), id > 0 {
+                    ids.insert(Int(id))
+                }
+            }
+        }
+        return ids
     }
 
     /// 读字符串属性（MPV_FORMAT_STRING，用完释放）
@@ -480,6 +496,8 @@ final class MpvPlayer {
         case MPV_EVENT_FILE_LOADED:
             // 仅文件加载完成（track-list 就绪）时触发，START_FILE 时轨道信息尚不可用
             DispatchQueue.main.async { [weak self] in
+                // 新文件加载会重建 track-list，旧的外挂轨 id 已失效，先清掉避免误删新文件的轨
+                self?.addedExternalSubIDs.removeAll()
                 self?.onReady?()
             }
         case MPV_EVENT_END_FILE:
@@ -498,9 +516,13 @@ final class MpvPlayer {
                 mpvLogger.info("mpv[\(level, privacy: .public)] \(text, privacy: .public)")
                 if level == "error" {
                     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // 字幕解码器缺失（如 PGS 图形字幕未编译进 ffmpeg）只影响该字幕轨，
-                    // 不影响播放，不弹全屏错误（记日志即可）
-                    if !trimmed.contains("subtitle decoder") {
+                    // 字幕相关错误（解码器缺失、外挂格式不支持致 sub-add/sub-remove 失败、
+                    // sidecar 打不开等）只影响该字幕轨，不影响播放，不弹播放器错误浮层（记日志即可）
+                    let isSubtitleIssue = trimmed.localizedCaseInsensitiveContains("subtitle")
+                        || trimmed.contains("sub-add")
+                        || trimmed.contains("sub-remove")
+                        || trimmed.contains("Can not open external file")
+                    if !isSubtitleIssue {
                         DispatchQueue.main.async { [weak self] in
                             self?.onError?(trimmed)
                         }
@@ -586,7 +608,7 @@ private struct EventContext: @unchecked Sendable {
     let running: RunningFlag
 }
 
-/// 字幕轨描述（仅内置轨，id 为 mpv track-list 索引）
+/// 字幕轨描述（id 为 mpv track-list 的轨道 id，含内置轨与 sub-add 外挂轨）
 struct SubtitleTrack {
     let id: Int
     let lang: String?

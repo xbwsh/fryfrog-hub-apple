@@ -184,6 +184,7 @@ final class VideoService {
                 )
             }
         } catch {
+            AppLog.networking.warning("外挂字幕列表拉取失败 videoId=\(id): \(AppLog.describe(error))")
             return []
         }
     }

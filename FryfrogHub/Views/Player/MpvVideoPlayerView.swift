@@ -853,8 +853,8 @@ struct MpvVideoPlayerView: View {
 
             Spacer()
 
-            // 字幕按钮（有字幕轨/外挂字幕时显示）
-            if !subtitleOptions.isEmpty {
+            // 字幕按钮（除"关闭"外还有可选轨时才显示；options 恒含"关闭"，不能只判非空）
+            if subtitleOptions.count > 1 {
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) { showSubtitleMenu = true }
                     controlsHideTask?.cancel()
@@ -1019,14 +1019,19 @@ struct MpvVideoPlayerView: View {
             let name = track.title ?? Self.languageName(track.lang) ?? "轨道 \(track.id)"
             return SubtitleOption(id: "builtin:\(track.id)", label: "内置 · \(name)", kind: .builtin(track))
         }
-        options += external.map { file in
-            let lang = file.language.flatMap(Self.languageName).map { " · \($0)" } ?? ""
-            return SubtitleOption(id: "ext:\(file.url ?? file.filename)", label: "外挂 · \(file.filename)\(lang)", kind: .external(file))
-        }
+        options += external
+            .filter { !Self.unsupportedExternalExtensions.contains(($0.filename as NSString).pathExtension.lowercased()) }
+            .map { file in
+                let lang = file.language.flatMap(Self.languageName).map { " · \($0)" } ?? ""
+                return SubtitleOption(id: "ext:\(file.url ?? file.filename)", label: "外挂 · \(file.filename)\(lang)", kind: .external(file))
+            }
         subtitleOptions = options
 
         restoreSubtitlePreference(builtin: builtin, external: external)
     }
+
+    /// 本客户端 ffmpeg 未编译 vobsub/microdvd/原始 sup demuxer，这三种外挂格式 sub-add 必失败，不进菜单
+    private static let unsupportedExternalExtensions: Set<String> = ["sup", "idx", "sub"]
 
     /// 恢复上次字幕选择；无匹配时默认选第一条内置轨
     private func restoreSubtitlePreference(builtin: [SubtitleTrack], external: [SubtitleFile]) {
