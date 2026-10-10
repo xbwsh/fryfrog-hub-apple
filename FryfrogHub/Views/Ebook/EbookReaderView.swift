@@ -36,6 +36,11 @@ struct EbookReaderView: View {
                     initialPercent: positionPercent,
                     onProgress: { report($0) }
                 )
+            case "TXT":
+                // 在线阅读：不依赖 fileURL（正文/目录走独立接口）
+                EbookTxtReaderView(book: book) { percent, chapterIndex in
+                    report(percent, chapterIndex: chapterIndex)
+                }
                 default:
                     fallbackView
                 }
@@ -72,14 +77,15 @@ struct EbookReaderView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// 节流上报：间隔 ≥3s 或变化 ≥5% 才发请求
-    private func report(_ percent: Double) {
+    /// 节流上报：间隔 ≥3s 或变化 ≥5% 才发请求。
+    /// chapterIndex 优先用调用方传入（TXT 在线阅读的实时全局章序）；PDF/EPUB 不传，沿用已保存进度里的章节。
+    private func report(_ percent: Double, chapterIndex: Int? = nil) {
         positionPercent = percent
         let now = Date()
         if now.timeIntervalSince(lastReportedAt) >= 3 || abs(percent - lastReportedPercent) >= 5 {
             lastReportedAt = now
             lastReportedPercent = percent
-            let chapter = book.progress?.chapterIndex
+            let chapter = chapterIndex ?? book.progress?.chapterIndex
             Task {
                 try? await EbookService.shared.updateProgress(
                     id: book.id, positionPercent: percent, chapterIndex: chapter

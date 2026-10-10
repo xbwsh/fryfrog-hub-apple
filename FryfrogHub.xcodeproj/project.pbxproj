@@ -10,6 +10,7 @@
 		011BC46A75FCD9DBDE5EC5BD /* ServerImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E161DD4A20CF6B3B89EC75 /* ServerImageView.swift */; };
 		01499635AB36761703EC5875 /* FryfrogHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4819A434409E709C08DFDE41 /* FryfrogHubApp.swift */; };
 		056789A4A921713612122CFF /* AudiobookPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7627B8C651FA5C395343102 /* AudiobookPlayerView.swift */; };
+		094D3A74247902F21B966975 /* EbookTxtReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03019E85B51D65FC5C75ABE9 /* EbookTxtReaderView.swift */; };
 		096AE15FA47A4F46F3712051 /* AudiobookListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F28BDDCEF91DF6D070E7752 /* AudiobookListView.swift */; };
 		0BEE8E724E8DA4699A012838 /* LibraryAccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842252A5EEAB35C2B27C304E /* LibraryAccessView.swift */; };
 		115E99456086600C348CD0B5 /* MusicPlaylistRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E450A41511C861AC25B417E /* MusicPlaylistRow.swift */; };
@@ -142,6 +143,7 @@
 
 /* Begin PBXFileReference section */
 		0035B7B236BF96FEB3C54A5C /* Ass.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Ass.xcframework; path = Vendor/Ass.xcframework; sourceTree = "<group>"; };
+		03019E85B51D65FC5C75ABE9 /* EbookTxtReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EbookTxtReaderView.swift; sourceTree = "<group>"; };
 		06814EB19C8CAFBE0D8334A0 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
 		08261B2BBF7918789FE124A0 /* Harfbuzz.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Harfbuzz.xcframework; path = Vendor/Harfbuzz.xcframework; sourceTree = "<group>"; };
 		0AC29BC1935AC6B9765F938E /* ServerConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerConnectionTests.swift; sourceTree = "<group>"; };
@@ -352,6 +354,7 @@
 				B3021A686DDFD109FFCAA746 /* EbookListView.swift */,
 				EE4C793B071AAD84E9FF2260 /* EbookReaderView.swift */,
 				D000E9AEC227D5684999414C /* EbookScrapeView.swift */,
+				03019E85B51D65FC5C75ABE9 /* EbookTxtReaderView.swift */,
 			);
 			path = Ebook;
 			sourceTree = "<group>";
@@ -779,6 +782,7 @@
 				57F7DA804CC1D3E6CD8AE08A /* EbookReaderView.swift in Sources */,
 				F85C918F80CE4352DB4E0E26 /* EbookScrapeView.swift in Sources */,
 				1FFBFF83E7BF7806AC9B942C /* EbookService.swift in Sources */,
+				094D3A74247902F21B966975 /* EbookTxtReaderView.swift in Sources */,
 				CD5F2518176E435CF829522D /* EpisodeDisplayMode.swift in Sources */,
 				980E7FA30322DD34E9163FB0 /* FavoritesView.swift in Sources */,
 				4BC9C46E54731995AA166DB2 /* FlatSlider.swift in Sources */,

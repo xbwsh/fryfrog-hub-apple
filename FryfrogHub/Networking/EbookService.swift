@@ -135,6 +135,29 @@ final class EbookService {
         )
     }
 
+    // MARK: - TXT 在线阅读
+
+    /// 章节目录分页（字符偏移存服务端；size>0 时后端返回 PageResponse）
+    func fetchChapterPage(id: Int64, page: Int, size: Int = 300) async throws -> PageResponse<EbookChapterDTO> {
+        let response: ApiResponse<PageResponse<EbookChapterDTO>> = try await client.request(
+            "/api/v1/ebooks/\(id)/chapters",
+            queryItems: [
+                URLQueryItem(name: "page", value: String(page)),
+                URLQueryItem(name: "size", value: String(size)),
+            ]
+        )
+        return response.data ?? PageResponse(content: [], page: page, size: size, totalElements: 0, totalPages: 0)
+    }
+
+    /// 某章正文
+    func fetchChapterContent(id: Int64, chapterIndex: Int) async throws -> String {
+        let response: ApiResponse<EbookChapterContentDTO> = try await client.request(
+            "/api/v1/ebooks/\(id)/content",
+            queryItems: [URLQueryItem(name: "chapterIndex", value: String(chapterIndex))]
+        )
+        return response.data?.text ?? ""
+    }
+
     // MARK: - 刮削
 
     /// 搜索刮削候选（Bangumi）

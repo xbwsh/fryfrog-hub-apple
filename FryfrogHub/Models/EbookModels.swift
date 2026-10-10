@@ -61,6 +61,7 @@ struct EbookDetailDTO: Decodable, Identifiable, Hashable {
         case "EPUB": return "EPUB"
         case "PDF": return "PDF"
         case "MOBI": return "MOBI/AZW3"
+        case "TXT": return "TXT"
         default: return format ?? "未知"
         }
     }
@@ -71,11 +72,26 @@ struct EbookDetailDTO: Decodable, Identifiable, Hashable {
         return mb >= 1 ? String(format: "%.1f MB", mb) : String(format: "%.0f KB", Double(fileSize) / 1024)
     }
 
-    var readable: Bool { format == "EPUB" || format == "PDF" }
+    var readable: Bool { format == "EPUB" || format == "PDF" || format == "TXT" }
 
     struct ProgressDTO: Decodable, Hashable {
         let positionPercent: Double?
         let chapterIndex: Int?
         let completed: Bool?
     }
+}
+
+// MARK: - TXT 在线阅读
+
+/// TXT 章节目录项（index 为全书全局序号，字符偏移存服务端）
+struct EbookChapterDTO: Decodable, Identifiable, Hashable {
+    let index: Int
+    let title: String?
+
+    var id: Int { index }
+}
+
+/// TXT 某章正文
+struct EbookChapterContentDTO: Decodable, Hashable {
+    let text: String
 }
