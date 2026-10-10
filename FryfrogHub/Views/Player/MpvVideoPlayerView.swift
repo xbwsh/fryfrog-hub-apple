@@ -117,10 +117,10 @@ struct MpvVideoPlayerView: View {
             }
             if controlsVisible {
                 LinearGradient(
-                    colors: [.black.opacity(0), .black.opacity(0.55)],
+                    colors: [.black.opacity(0), .black.opacity(0.82)],
                     startPoint: .top, endPoint: .bottom
                 )
-                .frame(height: 130)
+                .frame(height: 150)
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)
@@ -923,22 +923,10 @@ struct MpvVideoPlayerView: View {
 
     // MARK: - 底部控制栏
 
+    /// 底部控制栏：进度条独占一行 + 下方播放/时间行，直接叠在底部渐变遮罩上（对齐 Web 原型，无悬浮面板）
     private var controlBar: some View {
-        HStack(spacing: 16) {
-            Button {
-                togglePlay()
-            } label: {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 26))
-                    .frame(width: 44, height: 44)
-            }
-            .tint(.white)
-
-            Text(timeText(currentPosition))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.9))
-                .frame(minWidth: 48, alignment: .leading)
-
+        VStack(alignment: .leading, spacing: 8) {
+            // 进度条整行
             ZStack(alignment: .leading) {
                 FlatSlider(
                     value: Binding(
@@ -971,30 +959,29 @@ struct MpvVideoPlayerView: View {
                 }
                 .allowsHitTesting(false)
             }
-            .frame(height: 44)
+            .frame(height: 36)
 
-            Text(timeText(sliderUpperBound))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.9))
-                .frame(minWidth: 48, alignment: .trailing)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background { controlBarGlassBackground() }
-        .padding(.horizontal, 12)
-    }
+            // 播放按钮 + 时间
+            HStack(spacing: 12) {
+                Button {
+                    togglePlay()
+                } label: {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 22))
+                        .frame(width: 40, height: 40)
+                }
+                .tint(.white)
 
-    /// 底部控制栏液态玻璃背景
-    @ViewBuilder
-    private func controlBarGlassBackground() -> some View {
-        if #available(iOS 26.0, *) {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.clear)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
-        } else {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
+                Text("\(timeText(currentPosition)) / \(timeText(sliderUpperBound))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.9))
+
+                Spacer()
+            }
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
     }
 
     // MARK: - 字幕

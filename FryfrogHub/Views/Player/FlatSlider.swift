@@ -13,9 +13,10 @@ struct FlatSlider: UIViewRepresentable {
         slider.minimumValue = Float(range.lowerBound)
         slider.maximumValue = Float(range.upperBound)
         slider.value = Float(value)
-        slider.minimumTrackTintColor = .white
-        // 未播轨道调暗，让叠加的已缓冲区域（白 30%）可区分
-        slider.maximumTrackTintColor = .white.withAlphaComponent(0.15)
+        // 已播段主题青色（对齐 Web 原型 --accent）
+        slider.minimumTrackTintColor = UIColor(red: 0, green: 0.784, blue: 0.706, alpha: 1)
+        // 未播轨道白色 24%
+        slider.maximumTrackTintColor = .white.withAlphaComponent(0.24)
         slider.setThumbImage(Self.thumbImage, for: .normal)
         slider.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
         slider.addTarget(context.coordinator, action: #selector(Coordinator.editingBegan(_:)), for: .touchDown)
@@ -34,13 +35,21 @@ struct FlatSlider: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    /// 14pt 白色圆点滑块（无投影）
+    /// 白色圆点滑块（柔和投影，对齐 Web 原型 progress-dot）。
+    /// 画布放大到 24pt 给投影留空间；renderer 默认 opaque=true 会垫黑底（就是看到的"黑底"），必须关掉
     private static let thumbImage: UIImage = {
-        let size: CGFloat = 14
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+        let canvas: CGFloat = 24
+        let circle: CGFloat = 12
+        let inset = (canvas - circle) / 2
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: canvas, height: canvas), format: format)
         return renderer.image { ctx in
+            ctx.cgContext.setShadow(
+                offset: .zero, blur: 4, color: UIColor.black.withAlphaComponent(0.6).cgColor
+            )
             UIColor.white.setFill()
-            UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: size, height: size)).fill()
+            UIBezierPath(ovalIn: CGRect(x: inset, y: inset, width: circle, height: circle)).fill()
         }
     }()
 
